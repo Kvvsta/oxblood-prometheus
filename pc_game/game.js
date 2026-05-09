@@ -3,21 +3,33 @@
 // https://medium.com/better-programming/how-to-make-a-simple-game-loop-using-vanilla-javascript-f7f6360f68a2
 // https://www.aleksandrhovhannisyan.com/blog/javascript-game-loop/
 
+// Canvas information /////////////////////////////////////////////////////////
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
-canvas.height = window.innerHeight;
-canvas.width = window.innerWidth;
 
-// Cursor (laptop mouse for now)
+canvas.height = canvas.clientHeight;
+canvas.width = canvas.clientWidth;
+
+// Cursor (laptop mouse for now) //////////////////////////////////////////////
 var cursorX = canvas.width / 2;
 var cursorY = canvas.height / 2;
+
+// TODO temporarily updating cursor with mouse movement
 document.addEventListener("mousemove", (event) => {
     cursorX = event.clientX;
     cursorY = event.clientY;
 });
 
-// Eagles
+function renderCursor() {
+    ctx.fillStyle = "black";
+    ctx.beginPath();
+    ctx.arc(cursorX, cursorY, 10, 0, 2 * Math.PI);
+    ctx.fill();
+}
+
+// Eagles /////////////////////////////////////////////////////////////////////
 var eagles = [];// array of eagles
+var eagleRadius = 15;
 
 function spawnNewEagle() {
     // choose a random side of screen
@@ -54,17 +66,16 @@ function spawnNewEagle() {
             break;
     }
 
-    // Calculate speed of eagle (base speed is 2)
+    // Generate speed of eagle (base speed is 2)
     speed = 2 + Math.floor(Math.random() * 3);
 
-    // Save the eagle
+    // Save the eagle to the array
     eagles.push({
         x: x,
         y: y,
         speed: speed,
         alive: true
     });
-
 }
 
 function renderEagles() {
@@ -80,41 +91,60 @@ function renderEagles() {
         eagle.y += (dy / dist) * eagle.speed;
 
         // Draw eagle
-        ctx.fillStyle = "green";
+        ctx.fillStyle = "orange";
         ctx.beginPath();
-        ctx.arc(eagle.x, eagle.y, 15, 0, Math.PI * 2);
+        ctx.arc(eagle.x, eagle.y, eagleRadius, 0, Math.PI * 2);
         ctx.fill();
     }
 }
 
-// Game loop
+// Prometheus /////////////////////////////////////////////////////////////////
+// TODO maybe implement like health bar or some shit idk
+function renderPrometheus() {
+    ctx.beginPath();
+    // draw a circle halfway down page
+    ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, 2 * Math.PI);
+    ctx.fillStyle = "maroon";
+    ctx.fill();
+}
+
+// Telemetry data
+var pitch = 67; // starting values
+var roll = 67;
+var latency = 67;
+var gesture = "PAUSE";
+
+function updateTelemetryData() {
+    document.getElementById("pitchValue").textContent = pitch;
+    document.getElementById("rollValue").textContent = roll;
+    document.getElementById("latencyValue").textContent = latency;
+    document.getElementById("gestureValue").textContent = gesture;
+}
+
+// Game loop //////////////////////////////////////////////////////////////////
 function drawGame() {
     // Clear screen
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Insert Prometheus
-    ctx.beginPath();
-    // draw a circle halfway down page
-    ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, 2 * Math.PI);
-    ctx.fillStyle = "red";
-    ctx.fill();
+    // TODO telemetry data should be updated when a new packet is sent
+    // update in here for now
+    updateTelemetryData();
 
+    // Render Prometheus
+    renderPrometheus();
     // Draw player cursor
-    ctx.fillStyle = "black";
-    ctx.beginPath();
-    ctx.arc(cursorX, cursorY, 10, 0, 2 * Math.PI);
-    ctx.fill();
+    renderCursor();
 
     // Check if an eagle has died
     for (let eagle of eagles) {
         let cdx = cursorX - eagle.x;
         let cdy = cursorY - eagle.y;
+        // Calculate distance of cursor from eagle
         let cursorDist = Math.sqrt(cdx * cdx + cdy * cdy);
-        if (cursorDist < 15) { // eagle is 15 radius
+        if (cursorDist < eagleRadius) {
             eagle.alive = false;
         }
     }
-
     // Filter out dead eagles
     eagles = eagles.filter(eagle => eagle.alive);
 

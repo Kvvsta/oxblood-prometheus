@@ -4,27 +4,31 @@
 <!doctype html>
 <html>
     <head>
-        <title>Limited Livers</title>
-        <style>
-            body {
-                margin: 0;
-                background: maroon;
-                border: 1px solid black;
-            }
-
-            canvas {
-                display: block;
-                border: 1px solid red;
-                background: blanchedalmond;
-
-            }
-        </style>
+        <title>4011-Project</title>
+        <link rel="stylesheet" href="style.css">
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Caesar+Dressing&display=swap" rel="stylesheet">
+        
     </head>
 
     <body>
+        <section id="gameSection">
+            <h1 id="gameTitle">LIVER SENTINEL</h1>
+            <canvas id="gameCanvas"></canvas>
+        </section>
+        
+        <section id="telemetrySection">
+            <h2>Telemetry</h2>
 
-        <canvas id="gameCanvas" ></canvas>
+            <p>Pitch: <span id="pitchValue">0</span></p>
+            <p>Roll: <span id="rollValue">0</span></p>
+            <p>Packets/sec: <span id="packetValue">0</span></p>
+            <p>Latency: <span id="latencyValue">0</span> ms</p>
+            <p>Gesture: <span id="gestureValue">None</span></p>
+        </section>
 
         <script src="game.js"></script>
     </body>
+
 </html>
