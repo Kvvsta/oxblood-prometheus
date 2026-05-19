@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Oxblood-Prometheus — Cursor Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d1a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Courier New', monospace;
+      color: #ccc;
+      gap: 16px;
+    }
+
+    h1 {
+      color: #c0392b;
+      letter-spacing: 4px;
+      font-size: 1.4rem;
+      text-transform: uppercase;
+    }
+
+    canvas {
+      border: 2px solid #c0392b;
+      box-shadow: 0 0 20px #c0392b55;
+      display: block;
+    }
+
+    #hud {
+      display: flex;
+      gap: 32px;
+      font-size: 0.85rem;
+      color: #888;
+    }
+
+    #hud span { color: #c0392b; }
+
+    #status {
+      font-size: 0.8rem;
+      padding: 4px 12px;
+      border-radius: 4px;
+      background: #1a1a2e;
+    }
+
+    #status.connected    { color: #27ae60; }
+    #status.disconnected { color: #c0392b; }
+  </style>
+</head>
+<body>
+
+  <h1>Oxblood &mdash; Prometheus</h1>
+  <canvas id="canvas"></canvas>
+
+  <div id="hud">
+    <div style="color:#e74c3c">P1 Cell: <span id="cell1">–</span></div>
+    <div style="color:#3498db">P2 Cell: <span id="cell2">–</span></div>
+  </div>
+
+  <div id="status" class="disconnected">Disconnected — is bridge.py running?</div>
+
+  <script>
+    // ── Grid config ──────────────────────────────────────────────
+    const COLS      = 80;
+    const ROWS      = 50;
+    const CELL_PX   = 16;
+    const DEAD_ZONE  = 0.18;  // rad/s — ignore noise below this
+    const SCALE      = 140.0; // linear scale factor (tune this)
+    const AXIS_BIAS  = 3.5;   // diagonal suppression
+
+    // ── Canvas setup ─────────────────────────────────────────────
+    const canvas = document.getElementById('canvas');
+    canvas.width  = COLS * CELL_PX;
+    canvas.height = ROWS * CELL_PX;
+    const ctx = canvas.getContext('2d');
+
+    // ── Player state (one entry per player) ──────────────────────
+    const players = {
+      1: { x: (COLS - 1) / 2, y: (ROWS - 1) / 2, color: '#e74c3c', cell: 'cell1', bias: { gy: 0, gz: 0 } },
+      2: { x: (COLS - 1) / 2, y: (ROWS - 1) / 2, color: '#3498db', cell: 'cell2', bias: { gy: 0, gz: 0 } },
+    };
+
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    // ── Drawing ───────────────────────────────────────────────────
+    function draw() {
+      ctx.fillStyle = '#0d0d1a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = '#1e1e3a';
+      ctx.lineWidth = 1;
+      for (let c = 0; c <= COLS; c++) {
+        ctx.beginPath();
+        ctx.moveTo(c * CELL_PX, 0);
+        ctx.lineTo(c * CELL_PX, canvas.height);
+        ctx.stroke();
+      }
+      for (let r = 0; r <= ROWS; r++) {
+        ctx.beginPath();
+        ctx.moveTo(0, r * CELL_PX);
+        ctx.lineTo(canvas.width, r * CELL_PX);
+        ctx.stroke();
+      }
+
+      ctx.strokeStyle = '#c0392b44';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+
+      for (const [id, p] of Object.entries(players)) {
+        // Render at actual float position for smooth sub-cell movement
+        const cx = clamp(p.x, 0, COLS - 1) * CELL_PX + CELL_PX / 2;
+        const cy = clamp(p.y, 0, ROWS - 1) * CELL_PX + CELL_PX / 2;
+        const r  = CELL_PX - 2;
+
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Show float position in HUD
+        document.getElementById(p.cell).textContent =
+          `(${p.x.toFixed(1)}, ${p.y.toFixed(1)})`;
+      }
+    }
+
+    // ── Last known gyro velocity per player (dead reckoning) ────────
+    const lastGyro = {
+      1: { gy: 0, gz: 0 },
+      2: { gy: 0, gz: 0 },
+    };
+
+    // ── Apply one gyro sample ─────────────────────────────────────
+    // Uses actual elapsed time (dt) so the game loop runs at the
+    // display refresh rate (~60 Hz) independent of the 50 Hz sensor.
+    // Linear mapping — no cap so fast flicks travel proportionally far.
+    function mapAxis(v, dt) {
+      const mag = Math.abs(v) - DEAD_ZONE;
+      if (mag <= 0) return 0;
+      return Math.sign(v) * mag * SCALE * dt;
+    }
+
+    function applyGyro(playerID, gy, gz, dt) {
+      const p = players[playerID];
+      if (!p) return;
+
+      // Adaptive bias correction: the LSM6DSL has a small zero-rate offset
+      // (~±0.17 rad/s) that accumulates during continuous motion. When the
+      // device is still (both axes within dead zone), slowly update the bias
+      // estimate. Subtracting it before the dead zone check means accumulated
+      // drift is corrected from the brief pauses between gestures.
+      if (Math.abs(gy) < DEAD_ZONE && Math.abs(gz) < DEAD_ZONE) {
+        p.bias.gy += (gy - p.bias.gy) * 0.05;
+        p.bias.gz += (gz - p.bias.gz) * 0.05;
+      }
+      gy -= p.bias.gy;
+      gz -= p.bias.gz;
+
+      const absY = Math.abs(gy);
+      const absZ = Math.abs(gz);
+
+      // Suppress the weaker axis to prevent diagonal drift
+      const useZ = absZ > DEAD_ZONE && !(absY > absZ * AXIS_BIAS);
+      const useY = absY > DEAD_ZONE && !(absZ > absY * AXIS_BIAS);
+
+      const dx = useZ ? mapAxis(-gz, dt) : 0;
+      const dy = useY ? mapAxis(gy,  dt) : 0;
+
+      p.x = clamp(p.x + dx, 0, COLS - 1);
+      p.y = clamp(p.y + dy, 0, ROWS - 1);
+    }
+
+    // ── Game loop (requestAnimationFrame ~60 Hz) ──────────────────
+    // Extrapolates position using the last known velocity every frame.
+    // WebSocket packets just update lastGyro — they no longer drive
+    // rendering directly. Total displacement is identical to before
+    // (SCALE * velocity * dt still integrates correctly), just spread
+    // smoothly across more frames.
+    let lastTime = null;
+
+    function gameLoop(timestamp) {
+      if (lastTime === null) lastTime = timestamp;
+      const dt = Math.min((timestamp - lastTime) / 1000, 0.05); // cap at 50ms
+      lastTime = timestamp;
+
+      for (const id of Object.keys(players)) {
+        const g = lastGyro[id];
+        applyGyro(parseInt(id), g.gy, g.gz, dt);
+      }
+
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
+
+    // ── WebSocket 
+    const statusEl = document.getElementById('status');
+
+    function connect() {
+      const ws = new WebSocket('ws://localhost:8765');
+
+      ws.onopen = () => {
+        statusEl.textContent = 'Connected';
+        statusEl.className   = 'connected';
+      };
+
+      ws.onclose = () => {
+        statusEl.textContent = 'Disconnected — retrying in 2 s…';
+        statusEl.className   = 'disconnected';
+        setTimeout(connect, 2000);
+      };
+
+      ws.onerror = () => ws.close();
+
+      ws.onmessage = (e) => {
+        try {
+          const { player, gy, gz } = JSON.parse(e.data);
+          if (lastGyro[player]) lastGyro[player] = { gy, gz };
+        } catch (_) {}
+      };
+    }
+
+    requestAnimationFrame(gameLoop);
+    connect();
+  </script>
+</body>
+</html>
