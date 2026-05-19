@@ -10,6 +10,37 @@ const ctx = canvas.getContext("2d");
 canvas.height = canvas.clientHeight;
 canvas.width = canvas.clientWidth;
 
+// Game logic /////////////////////////////////////////////////////////////////
+// Game state
+var gamestate = "menu";
+
+// Player details /////////////////////////////////////////////////////////////
+var players = [];
+var playerRadius = 10;
+var playerCount = 0;
+
+function addPlayer() {
+    // New player gets rendered at centre of screen
+    // Save the player to the array
+    players.push({
+        index: playerCount, // Player identifier
+        x: canvas.width / 2, // Player x coord
+        y: canvas.height / 2, // Y coord
+        lastCoordUpdate: performance.now()
+    });
+
+    playerCount++;
+}
+
+function renderPlayers() {
+    for (let player of players) {
+        ctx.fillStyle = "blue";
+        ctx.beginPath();
+        ctx.arc(cursorX, cursorY, 10, 0, 2 * Math.PI);
+        ctx.fill();
+    }
+}
+
 // Cursor (laptop mouse for now) //////////////////////////////////////////////
 var cursorX = canvas.width / 2;
 var cursorY = canvas.height / 2;
@@ -26,6 +57,28 @@ function renderCursor() {
     ctx.arc(cursorX, cursorY, 10, 0, 2 * Math.PI);
     ctx.fill();
 }
+
+// Gestures (keyboard for now) ////////////////////////////////////////////////
+document.addEventListener("keydown", (event) => {
+
+    if (event.key === "s") {
+        startGame();
+    }
+
+    if (event.key === "p") {
+
+        if (gameState === "running") {
+            gameState = "paused";
+        }
+        else if (gameState === "paused") {
+            gameState = "running";
+        }
+    }
+
+    if (event.key === "r") {
+        startGame();
+    }
+});
 
 // Eagles /////////////////////////////////////////////////////////////////////
 var eagles = [];// array of eagles
@@ -78,18 +131,25 @@ function spawnNewEagle() {
     });
 }
 
-function renderEagles() {
+function updateEaglePos() {
     for (let eagle of eagles) {
-
         let dx = canvas.width / 2 - eagle.x;
         let dy = canvas.height / 2 - eagle.y;
 
         // distance to travel to prometheus
         let dist = Math.sqrt(dx * dx + dy * dy);
 
-        eagle.x += (dx / dist) * eagle.speed;
-        eagle.y += (dy / dist) * eagle.speed;
+        if (dist < 50) {
+            gameState = "gameover";
+        } else {
+            eagle.x += (dx / dist) * eagle.speed;
+            eagle.y += (dy / dist) * eagle.speed;
+        }
+    }
+}
 
+function renderEagles() {
+    for (let eagle of eagles) {
         // Draw eagle
         ctx.fillStyle = "orange";
         ctx.beginPath();
@@ -108,8 +168,8 @@ function renderPrometheus() {
     ctx.fill();
 }
 
-// Telemetry data
-var pitch = 67; // starting values
+// Telemetry data 
+var pitch = 60; // starting values
 var roll = 67;
 var latency = 67;
 var gesture = "PAUSE";
@@ -121,20 +181,72 @@ function updateTelemetryData() {
     document.getElementById("gestureValue").textContent = gesture;
 }
 
-// Game loop //////////////////////////////////////////////////////////////////
-function drawGame() {
-    // Clear screen
+// Connect to the server (MAKE SURE LIVER BACKEND.PY RUNNING)
+const socket = new WebSocket('ws://localhost:6767');
+socket.onopen = () => {
+    document.getElementById("websocketValue").textContent = "YES";
+};
+
+socket.onmessage = (event) => {
+    let data = JSON.parse(event.data);
+
+    player = players[data.player - 1];
+    gy = data.gy;
+    gz = data.gz;
+
+    // Calculate time elapsed since player coords last updated
+    let currentTime = performance.now();
+    let deltaTime = currentTime - player.lastCoordUpdate; // JSON players are 1-indexed
+
+    // Update player position
+    player.x += gy * deltaTime;
+    player.y += gz * deltaTime;
+
+    player.lastCoordUpdate = currentTime;
+};
+
+
+
+
+// Game Functions //////////////////////////////////////////////////////////////////
+
+// Menu
+function renderMenu() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // TODO telemetry data should be updated when a new packet is sent
-    // update in here for now
-    updateTelemetryData();
+    ctx.fillStyle = "white";
 
-    // Render Prometheus
-    renderPrometheus();
-    // Draw player cursor
-    renderCursor();
+    ctx.font = "48px Arial";
 
+    ctx.textAlign = "center";
+
+    ctx.fillText(
+        "LIMITED LIVERS",
+        canvas.width / 2,
+        canvas.height / 2
+    );
+
+    ctx.font = "24px Arial";
+
+    ctx.fillText(
+        "Show START gesture",
+        canvas.width / 2,
+        canvas.height / 2 + 60
+    );
+}
+
+// Start gesture response
+function startGame() {
+
+    eagles = [];
+    addPlayer();
+    addPlayer();
+
+    gameState = "running";
+}
+
+// Game running
+function updateGameplay() {
     // Check if an eagle has died
     for (let eagle of eagles) {
         let cdx = cursorX - eagle.x;
@@ -147,13 +259,94 @@ function drawGame() {
     }
     // Filter out dead eagles
     eagles = eagles.filter(eagle => eagle.alive);
+    // Move alive eagles
+    updateEaglePos();
+}
 
+function updateGameplayWireless() {
+    // Check if an eagle has died
+    for (let eagle of eagles) {
+        for (let player of players) {
+            let cdx = player.x - eagle.x;
+            let cdy = player.y - eagle.y;
+            // Calcuuate distance of player cursor from eagle
+            let playerDist = Math.sqrt(cdx * cdx + cdy * cdy);
+            if (playerDist < eagleRadius) {
+                eagle.alive = false;
+            }
+        }
+    }
+
+    // Filter out dead eagles
+    eagles = eagles.filter(eagle => eagle.alive);
+    // Move alive eagles
+    updateEaglePos();
+}
+
+function drawGame() {
+    // Clear screen
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Render Prometheus
+    renderPrometheus();
+    // Draw player cursor (IF NO WIRELESS)
+    renderCursor();
+    // Draw players (IF WIRELESS
+    renderPlayers();
     // Render eagles
     renderEagles();
 }
 
+function renderGameOver() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "white";
+
+    ctx.font = "48px Arial";
+
+    ctx.textAlign = "center";
+
+    ctx.fillText(
+        "LIMITED LIVERS",
+        canvas.width / 2,
+        canvas.height / 2
+    );
+
+    ctx.font = "24px Arial";
+
+    ctx.fillText(
+        "U LOST LOL press r to restart ig",
+        canvas.width / 2,
+        canvas.height / 2 + 60
+    );
+}
+
+
+// GAME LOOP
+function gameLoop() {
+
+    switch (gameState) {
+
+        case "menu":
+            renderMenu();
+            break;
+
+        case "running":
+            updateGameplay();
+            drawGame();
+            break;
+
+        case "paused":
+            break;
+
+        case "gameover":
+            renderGameOver();
+            break;
+    }
+}
+
 // Redraws window at 60FPS
-window.onload = setInterval(drawGame, 1000/60);
+window.onload = setInterval(gameLoop, 1000/60);
 
 // Spawns a new eagle every 2 seconds
 setInterval(spawnNewEagle, 2000);
