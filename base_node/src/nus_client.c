@@ -385,6 +385,8 @@ static void device_found(const bt_addr_le_t *addr, int8_t rssi, uint8_t type,
     err = bt_conn_le_create(addr, BT_CONN_LE_CREATE_CONN,
                             BT_LE_CONN_PARAM_DEFAULT, &client->conn);
     if (err) {
+        client->connecting = false;
+        client->conn = NULL;
         printk("Create conn to %s failed (%d)\n", addr_str, err);
         start_scan();
     } else {
@@ -405,7 +407,7 @@ static void start_scan(void)
     }
 
     err = bt_le_scan_start(BT_LE_SCAN_PASSIVE, device_found);
-    if (err) {
+    if (err && err != -EALREADY) {
         printk("Scanning failed to start (err %d)\n", err);
         return;
     }
