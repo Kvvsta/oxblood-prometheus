@@ -1,13 +1,11 @@
 #include "json_serial.h"
 #include "mobile_link.h"
-
 #include <zephyr/sys/printk.h>
 
 /*
  * Initialise JSON serial output.
  *
- * This emits a startup message confirming the serial JSON
- * interface is ready.
+ * Emits a startup message confirming the serial JSON interface is ready.
  */
 void json_serial_init(void)
 {
@@ -15,23 +13,20 @@ void json_serial_init(void)
 }
 
 /*
- * Emit one IMU record to PC
+ * Emit one IMU record to PC.
  *
+ * Output format matches what liver_backend.py and game.js expect:
+ *   {"player":1,"gy":1.234567,"gz":-0.678901}
+ *
+ * Requires CONFIG_CBPRINTF_FP_SUPPORT=y in prj.conf for %.6f support.
  */
-void json_emit_imu(const char* node_name,
-            uint32_t ts_ms,
-            float gyro_y,
-            float_gyro_z)
+void json_emit_imu(int player, float gyro_y, float gyro_z)
 {
-
-    printk("{\"type\":\"imu\",\"node\":\"%s\",\"ts_ms\":%u"
-           "\"gyro_y\":%.6f,\"gyro_z\":%.6f}\n",
-           node_name ? node_name : "unknown",
-           ts_ms,
+    printk("{\"player\":%d,\"gy\":%.6f,\"gz\":%.6f}\n",
+           player,
            (double)gyro_y,
-           (double)gyro_z); 
+           (double)gyro_z);
 }
-
 
 /*
  * Emit a simple status/debug message.
@@ -44,7 +39,7 @@ void json_emit_status(const char *status, const char *detail)
 }
 
 /*
- * Audio debug output
+ * Emit an audio debug message.
  */
 void json_emit_audio_debug(const char *event, const char *action)
 {

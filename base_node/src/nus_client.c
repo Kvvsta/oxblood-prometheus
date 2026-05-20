@@ -184,7 +184,7 @@ static uint8_t notify_func(struct bt_conn *conn,
 
     const struct imu_packet* pkt = (const struct imu_packet*)data; 
 
-    if (!mobile_link_process_imu_packet(client->name, pkt, length)) {
+    if (!mobile_link_process_imu_packet(client->name, pkt)) {
         json_emit_status("imu_packet_error", "processing failed");
     }
 

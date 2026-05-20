@@ -3,7 +3,6 @@
 
 #include <zephyr/kernel.h>
 
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
@@ -20,30 +19,37 @@ void mobile_link_init(struct k_msgq *target_q)
 }
 
 /*
- * Raw-json parser is ready.
+ * Emit a startup status message.
  */
 void mobile_link_start(void)
 {
-    json_emit_status("mobile_link",
-                     "ready to process raw 13-byte RSSI snapshots");
+    json_emit_status("mobile_link", "ready");
 }
 
-// Porcesses one packed IMU packet from a mobile node
-bool mobile_link_process_imu_packet(const char* node_name, 
-            const struct imu_packet* pkt) {
+/*
+ * Process one packed IMU packet from a mobile node and emit JSON to serial.
+ *
+ * Extracts the player number from the last character of node_name
+ * e.g. "PROMETHEUS-P1" -> player 1.
+ */
+bool mobile_link_process_imu_packet(const char *node_name,
+				    const struct imu_packet *pkt)
+{
     if (!node_name || !pkt) {
         return false;
     }
 
-    if (len != sizeof(struct imu_packet)) {
-        json_emit_status("imu_packet_error", "invalid IMU packet length");
-        return false; 
+    // Derive player number from last character of name ("PROMETHEUS-P1" -> 1)
+    int player = node_name[strlen(node_name) - 1] - '0';
+    if (player < 1 || player > 9) {
+        json_emit_status("imu_packet_error", "invalid player index in node name");
+        return false;
     }
 
     float gyro_y = (float)pkt->gy / 1000000.0f;
     float gyro_z = (float)pkt->gz / 1000000.0f;
 
-    json_emit_imu(node_name, k_uptime_get_32(), gyro_y, gyro_z);
+    json_emit_imu(player, gyro_y, gyro_z);
 
-    return true; 
-    }
+    return true;
+}
