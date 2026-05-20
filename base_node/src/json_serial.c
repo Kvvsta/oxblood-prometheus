@@ -1,6 +1,8 @@
 #include "json_serial.h"
 #include "mobile_link.h"
+
 #include <zephyr/sys/printk.h>
+#include <string.h>
 
 /*
  * Initialise JSON serial output.
@@ -22,7 +24,14 @@ void json_serial_init(void)
  */
 void json_emit_imu(int player, float gyro_y, float gyro_z)
 {
-    printk("{\"player\":%d,\"gy\":%.6f,\"gz\":%.6f}\n",
+    
+    if (strcmp(node_name, "PROMETHEUS-P1") == 0) {
+        player = 1;
+
+    } else if (strcmp(node_name, "PROMETHEUS-P2") == 0){
+        player = 2; 
+    }
+    printk("{\"player\":%d,\"gy\":%.4f,\"gz\":%.4f}\n",
            player,
            (double)gyro_y,
            (double)gyro_z);
