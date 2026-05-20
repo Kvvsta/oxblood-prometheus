@@ -446,7 +446,6 @@ static void connected(struct bt_conn *conn, uint8_t err) {
         bt_conn_unref(client->conn);
         client->conn = NULL;
         client->subscribed = false; 
-        client->connecting = false; 
 
         start_scan();
         return;

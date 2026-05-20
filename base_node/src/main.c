@@ -11,9 +11,12 @@ int main(void) {
     int err;
 
     json_serial_init();
+    //game_state_init();
     mobile_link_init();
     //audio_out_init();
     //serial_audio_init();
+
+    //ui_lvgl_init();
 
     err = bt_enable(NULL);
     if (err) {
@@ -33,6 +36,9 @@ int main(void) {
     }
 
     while (1) {
+
+        //ui_lvgl_update();
+
         k_sleep(K_SECONDS(1)); 
     }
 
