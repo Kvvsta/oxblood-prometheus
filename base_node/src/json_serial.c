@@ -19,8 +19,6 @@ void json_serial_init(void)
  *
  * Output format matches what liver_backend.py and game.js expect:
  *   {"player":1,"gy":1.234567,"gz":-0.678901}
- *
- * Requires CONFIG_CBPRINTF_FP_SUPPORT=y in prj.conf for %.6f support.
  */
 void json_emit_imu(int player, float gyro_y, float gyro_z)
 {
