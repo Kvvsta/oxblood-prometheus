@@ -39,17 +39,22 @@ bool mobile_link_process_imu_packet(const char *node_name,
         return false;
     }
 
+    if (len != sizeof(struct imu_packet)) {
+        json_emit_status("imu_packet_error", "invalid packet length");
+        return false;
+    }
+
     // Derive player number from last character of name ("PROMETHEUS-P1" -> 1)
-    int player = node_name[strlen(node_name) - 1] - '0';
+    /*int player = node_name[strlen(node_name) - 1] - '0';
     if (player < 1 || player > 9) {
         json_emit_status("imu_packet_error", "invalid player index in node name");
         return false;
-    }
+    }*/
 
     float gyro_y = (float)pkt->gy / 1000000.0f;
     float gyro_z = (float)pkt->gz / 1000000.0f;
 
-    json_emit_imu(player, gyro_y, gyro_z);
+    json_emit_imu(node_name, gyro_y, gyro_z);
 
     return true;
 }
