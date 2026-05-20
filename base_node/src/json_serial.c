@@ -20,7 +20,7 @@ void json_serial_init(void)
  * Output format matches what liver_backend.py and game.js expect:
  *   {"player":1,"gy":1.234567,"gz":-0.678901}
  */
-void json_emit_imu(int player, float gyro_y, float gyro_z)
+void json_emit_imu(const char* node_name, float gyro_y, float gyro_z)
 {
     
     if (strcmp(node_name, "PROMETHEUS-P1") == 0) {
@@ -28,7 +28,11 @@ void json_emit_imu(int player, float gyro_y, float gyro_z)
 
     } else if (strcmp(node_name, "PROMETHEUS-P2") == 0){
         player = 2; 
+    } else {
+        json_emit_status("imu_packet_error", "unknown player node");
+        return;
     }
+    
     printk("{\"player\":%d,\"gy\":%.4f,\"gz\":%.4f}\n",
            player,
            (double)gyro_y,
