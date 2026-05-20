@@ -22,6 +22,7 @@ void json_serial_init(void)
  */
 void json_emit_imu(const char* node_name, float gyro_y, float gyro_z)
 {
+    int player = -1; 
     
     if (strcmp(node_name, "PROMETHEUS-P1") == 0) {
         player = 1;
@@ -32,7 +33,7 @@ void json_emit_imu(const char* node_name, float gyro_y, float gyro_z)
         json_emit_status("imu_packet_error", "unknown player node");
         return;
     }
-    
+
     printk("{\"player\":%d,\"gy\":%.4f,\"gz\":%.4f}\n",
            player,
            (double)gyro_y,
