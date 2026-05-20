@@ -12,7 +12,7 @@ int main(void) {
 
     json_serial_init();
     //game_state_init();
-    mobile_link_init();
+    mobile_link_start();
     //audio_out_init();
     //serial_audio_init();
 
