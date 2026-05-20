@@ -271,6 +271,10 @@ static uint8_t discover_func(struct bt_conn *conn, const struct bt_gatt_attr *at
         } else {
             client->subscribed = true; 
             json_emit_status("nus_subscribe", "notifications enabled");
+
+            if (any_client_available()) {
+                start_scan();
+            }
         }
 
         return BT_GATT_ITER_STOP;
@@ -468,10 +472,6 @@ static void connected(struct bt_conn *conn, uint8_t err) {
 
     (void)mtu_exchange(client);
     begin_discovery(client); 
-
-    if (any_client_available()) {
-        start_scan(); 
-    }
 }
 
 /*
