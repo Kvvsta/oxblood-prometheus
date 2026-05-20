@@ -4,8 +4,6 @@ find_package(Zephyr REQUIRED HINTS $ENV{ZEPHYR_BASE})
 
 project(base_node)
 
-target_include_directories(app PRIVATE include)
-
 target_sources(app PRIVATE
     src/main.c
     src/nus_client.c
