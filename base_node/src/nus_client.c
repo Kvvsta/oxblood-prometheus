@@ -27,6 +27,13 @@ static const char* const mobile_names[NUM_MOBILE_NODES] = {
     "PROMETHEUS-P2",
 };
 
+static const struct bt_le_conn_param fast_conn_params = {
+	.interval_min = 16,
+	.interval_max = 16,
+	.latency = 0,
+	.timeout = 400,
+};
+
 /*
  * Nordic UART Service UUIDs.
 
@@ -453,6 +460,11 @@ static void connected(struct bt_conn *conn, uint8_t err) {
 
     printk("Connected: %s\n", client->name);
     json_emit_status("nus_connect", "connected to mobile node");
+
+    int parameter_err = bt_conn_le_param_update(conn, &fast_conn_params); 
+    if (parameter_err) {
+        printk("Connection parameter update failed: %d\n", parameter_err);
+    }
 
     (void)mtu_exchange(client);
     begin_discovery(client); 
