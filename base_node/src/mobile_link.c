@@ -7,17 +7,6 @@
 #include <stdint.h>
 #include <string.h>
 
-static struct k_msgq *app_q;
-
-/*
- * Initialise the mobile-link layer with the message queue used by the
- * processing thread.
- */
-void mobile_link_init(struct k_msgq *target_q)
-{
-    app_q = target_q;
-}
-
 /*
  * Emit a startup status message.
  */
@@ -33,7 +22,7 @@ void mobile_link_start(void)
  * e.g. "PROMETHEUS-P1" -> player 1.
  */
 bool mobile_link_process_imu_packet(const char *node_name,
-				    const struct imu_packet *pkt)
+				    const struct imu_packet *pkt, size_t len)
 {
     if (!node_name || !pkt) {
         return false;
