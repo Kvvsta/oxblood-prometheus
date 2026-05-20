@@ -5,8 +5,8 @@
 #include <zephyr/sys/util.h>
 
 struct imu_packet {
-    uint32_t gy; 
-    uint32_t gz;
-} __packed; 
+    int32_t gy;
+    int32_t gz;
+} __packed;
 
 #endif

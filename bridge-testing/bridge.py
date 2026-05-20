@@ -15,7 +15,7 @@ import os
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import logging
 
-SERIAL_PORT = "/dev/tty.usbmodem11401"   # base node
+SERIAL_PORT = "/dev/tty.usbmodem101"   # base node
 BAUD_RATE   = 115200
 WS_PORT     = 8765
 HTTP_PORT   = 8080

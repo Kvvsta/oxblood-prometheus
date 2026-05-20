@@ -47,7 +47,17 @@ static const struct bt_le_conn_param fast_conn_params = {
 #define BT_UUID_NUS_SERVICE BT_UUID_DECLARE_128(BT_UUID_NUS_SERVICE_VAL)
 #define BT_UUID_NUS_TX      BT_UUID_DECLARE_128(BT_UUID_NUS_TX_VAL)
 
-/* 
+/*
+ * Static CCC UUID with program lifetime.
+ *
+ * BT_UUID_GATT_CCC expands to a compound literal whose lifetime ends when
+ * the enclosing function returns.  Storing that pointer in the client struct
+ * from nus_client_init() yields a dangling pointer by the time discovery
+ * runs in mtu_exchange_cb.  A static variable avoids this entirely.
+ */
+static const struct bt_uuid_16 uuid_ccc = BT_UUID_INIT_16(BT_UUID_GATT_CCC_VAL);
+
+/*
  * Per-player BLE client state
  */
 struct mobile_client {
@@ -58,18 +68,18 @@ struct mobile_client {
     bool subscribed;
 
     struct bt_uuid_128 uuid;
-    const struct bt_uuid* ccc_uuid;
 
     struct bt_gatt_discover_params discover_params;
     struct bt_gatt_subscribe_params subscribe_params;
     struct bt_gatt_exchange_params mtu_exchange_params;
 
-    uint16_t nus_service_end_handle; 
-}; 
+    uint16_t nus_service_end_handle;
+};
 
 static struct mobile_client clients[NUM_MOBILE_NODES]; 
 
 static void start_scan(void);
+static void begin_discovery(struct mobile_client *client);
 
 // Finds which player owns a BLE connection
 static struct mobile_client* find_client_by_conn(struct bt_conn* conn) {
@@ -218,7 +228,15 @@ static uint8_t discover_func(struct bt_conn *conn, const struct bt_gatt_attr *at
     }
 
     if (!attr) {
-        json_emit_status("nus_discovery", "complete");
+        /* Discovery ended without finding what it was looking for.
+         * Report the stage so the failure is visible on serial. */
+        if (params->type == BT_GATT_DISCOVER_PRIMARY) {
+            json_emit_status("nus_discovery_error", "NUS service not found on peripheral");
+        } else if (params->type == BT_GATT_DISCOVER_CHARACTERISTIC) {
+            json_emit_status("nus_discovery_error", "NUS TX characteristic not found");
+        } else {
+            json_emit_status("nus_discovery_error", "NUS CCC descriptor not found");
+        }
         (void)memset(params, 0, sizeof(*params));
         return BT_GATT_ITER_STOP;
     }
@@ -245,7 +263,7 @@ static uint8_t discover_func(struct bt_conn *conn, const struct bt_gatt_attr *at
     if (!bt_uuid_cmp(client->discover_params.uuid, BT_UUID_NUS_TX)) {
         const struct bt_gatt_chrc *chrc = attr->user_data;
 
-        client->discover_params.uuid = client->ccc_uuid;
+        client->discover_params.uuid = &uuid_ccc.uuid;
         client->discover_params.start_handle = chrc->value_handle + 1U;
         client->discover_params.end_handle = client->nus_service_end_handle;
         client->discover_params.type = BT_GATT_DISCOVER_DESCRIPTOR;
@@ -280,13 +298,18 @@ static uint8_t discover_func(struct bt_conn *conn, const struct bt_gatt_attr *at
         return BT_GATT_ITER_STOP;
     }
 
-    return BT_GATT_ITER_STOP;
+    /* Non-CCC descriptor encountered during descriptor scan — keep going. */
+    return BT_GATT_ITER_CONTINUE;
 }
 
 /*
  * MTU exchange callback.
  *
- * This is optional but useful when transporting application data over GATT.
+ * GATT discovery is started here rather than in connected() because the ATT
+ * layer only allows one outstanding procedure per connection.  Calling
+ * bt_gatt_discover while bt_gatt_exchange_mtu is still pending returns
+ * -EBUSY and the discovery callback never fires, so notifications are
+ * never enabled.  Sequencing discovery after MTU completion avoids this.
  */
 static void mtu_exchange_cb(struct bt_conn *conn, uint8_t err,
                             struct bt_gatt_exchange_params *params)
@@ -299,6 +322,10 @@ static void mtu_exchange_cb(struct bt_conn *conn, uint8_t err,
            client ? client->name : "unknown",
            err == 0U ? "successful" : "failed",
            bt_gatt_get_mtu(conn));
+
+    if (client) {
+        begin_discovery(client);
+    }
 }
 
 /*
@@ -470,8 +497,14 @@ static void connected(struct bt_conn *conn, uint8_t err) {
         printk("Connection parameter update failed: %d\n", parameter_err);
     }
 
+    /* MTU exchange first; discovery is triggered from mtu_exchange_cb. */
     (void)mtu_exchange(client);
-    begin_discovery(client); 
+
+    /* Scan for the other player immediately rather than waiting for this
+     * player's subscription to complete — both can proceed in parallel. */
+    if (any_client_available()) {
+        start_scan();
+    }
 }
 
 /*
@@ -523,8 +556,7 @@ void nus_client_init(void)
         clients[i].name = mobile_names[i];
         clients[i].conn = NULL;
         clients[i].connecting = false; 
-        clients[i].subscribed = false; 
-        clients[i].ccc_uuid = BT_UUID_GATT_CCC; 
+        clients[i].subscribed = false;
         clients[i].nus_service_end_handle = 0;
 
         memset(&clients[i].uuid, 0, sizeof(clients[i].uuid));

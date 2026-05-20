@@ -1,6 +1,5 @@
 /*
  * Oxblood-Prometheus: P1 Mobile Node
- *
  */
 
 #include <zephyr/kernel.h>
@@ -8,6 +7,8 @@
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/services/nus.h>
+
+#define POLL_INTERVAL_MS 20  
 
 /*
  * Packed IMU payload sent over BLE NUS.
@@ -51,71 +52,22 @@ static const struct bt_data ad[] = {
 	BT_DATA(BT_DATA_NAME_COMPLETE, "PROMETHEUS-P1", sizeof("PROMETHEUS-P1") - 1),
 };
 
-
-#ifdef CONFIG_LSM6DSL_TRIGGER
-static void lsm6dsl_trigger_handler(const struct device *dev,
-				    const struct sensor_trigger *trig)
-{
-	static struct sensor_value gyro_y, gyro_z;
-
-	sensor_sample_fetch_chan(dev, SENSOR_CHAN_GYRO_XYZ);
-	sensor_channel_get(dev, SENSOR_CHAN_GYRO_Y, &gyro_y);
-	sensor_channel_get(dev, SENSOR_CHAN_GYRO_Z, &gyro_z);
-
-	// transmit if the base node has subscribed to notifications 
-	if (k_sem_take(&notif_sem, K_NO_WAIT) != 0) {
-		return;
-	}
-	k_sem_give(&notif_sem);
-
-	struct imu_packet pkt = {
-		.gy = gyro_y.val1 * 1000000 + gyro_y.val2,
-		.gz = gyro_z.val1 * 1000000 + gyro_z.val2,
-	};
-
-	int err = bt_nus_send(NULL, &pkt, sizeof(pkt));
-	if (err < 0 && err != -EAGAIN && err != -ENOTCONN) {
-		printk("NUS send error: %d\n", err);
-	}
-}
-#endif
-
 int main(void)
 {
-	struct sensor_value odr_attr;
 	const struct device *const lsm6dsl_dev = DEVICE_DT_GET_ONE(st_lsm6dsl);
 
 	if (!device_is_ready(lsm6dsl_dev)) {
 		printk("sensor: device not ready.\n");
 		return 0;
 	}
-
-	odr_attr.val1 = 104;
-	odr_attr.val2 = 0;
-
-	if (sensor_attr_set(lsm6dsl_dev, SENSOR_CHAN_ACCEL_XYZ,
-			    SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr) < 0) {
-		printk("Cannot set sampling frequency for accelerometer.\n");
-		return 0;
-	}
+	
+	struct sensor_value odr = { .val1 = 104, .val2 = 0 };
 
 	if (sensor_attr_set(lsm6dsl_dev, SENSOR_CHAN_GYRO_XYZ,
-			    SENSOR_ATTR_SAMPLING_FREQUENCY, &odr_attr) < 0) {
-		printk("Cannot set sampling frequency for gyro.\n");
+			    SENSOR_ATTR_SAMPLING_FREQUENCY, &odr) < 0) {
+		printk("Cannot set gyro sampling frequency.\n");
 		return 0;
 	}
-
-#ifdef CONFIG_LSM6DSL_TRIGGER
-	struct sensor_trigger trig = {
-		.type = SENSOR_TRIG_DATA_READY,
-		.chan = SENSOR_CHAN_ACCEL_XYZ,
-	};
-
-	if (sensor_trigger_set(lsm6dsl_dev, &trig, lsm6dsl_trigger_handler) != 0) {
-		printk("Could not set sensor trigger\n");
-		return 0;
-	}
-#endif
 
 	int err = bt_nus_cb_register(&nus_cb, NULL);
 	if (err) {
@@ -137,5 +89,32 @@ int main(void)
 	}
 
 	printk("P1 ready: Advertising as PROMETHEUS-P1\n");
+
+	while (1) {
+		k_msleep(POLL_INTERVAL_MS);
+
+		/* Only send while the base node has notifications enabled. */
+		if (k_sem_take(&notif_sem, K_NO_WAIT) != 0) {
+			continue;
+		}
+		k_sem_give(&notif_sem);
+
+		struct sensor_value gyro_y, gyro_z;
+
+		sensor_sample_fetch(lsm6dsl_dev);
+		sensor_channel_get(lsm6dsl_dev, SENSOR_CHAN_GYRO_Y, &gyro_y);
+		sensor_channel_get(lsm6dsl_dev, SENSOR_CHAN_GYRO_Z, &gyro_z);
+
+		struct imu_packet pkt = {
+			.gy = gyro_y.val1 * 1000000 + gyro_y.val2,
+			.gz = gyro_z.val1 * 1000000 + gyro_z.val2,
+		};
+
+		err = bt_nus_send(NULL, (const uint8_t *)&pkt, sizeof(pkt));
+		if (err < 0 && err != -EAGAIN && err != -ENOTCONN) {
+			printk("NUS send error: %d\n", err);
+		}
+	}
+
 	return 0;
 }
