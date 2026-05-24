@@ -348,6 +348,8 @@ function updateGameplayWireless() {
             let playerDist = Math.sqrt(cdx * cdx + cdy * cdy);
             if (playerDist < eagleRadius) {
                 eagle.alive = false;
+                // Send audio cue to base node
+                socket.send(JSON.stringify({"type":"audio", "event":"eagle_killed"}));
             }
         }
     }
@@ -416,6 +418,8 @@ function gameLoop() {
 
         case "gameover":
             renderGameOver();
+            // send audio cue to base node
+            socket.send(JSON.stringify({"type":"audio", "event":"game_over"}));
             break;
     }
 }
