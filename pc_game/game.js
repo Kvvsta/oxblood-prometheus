@@ -3,40 +3,109 @@
 // https://medium.com/better-programming/how-to-make-a-simple-game-loop-using-vanilla-javascript-f7f6360f68a2
 // https://www.aleksandrhovhannisyan.com/blog/javascript-game-loop/
 
+
+const DEAD_ZONE  = 0.18;  // rad/s — ignore noise below this
+const SCALE      = 140.0; // linear scale factor (tune this)
+const AXIS_BIAS  = 3.5;   // diagonal suppression
+
 // Canvas information /////////////////////////////////////////////////////////
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
 canvas.height = canvas.clientHeight;
 canvas.width = canvas.clientWidth;
+//canvas.width  = COLS * CELL_PX;
+//canvas.height = ROWS * CELL_PX;
 
 // Game logic /////////////////////////////////////////////////////////////////
 // Game state
-var gamestate = "menu";
+var gameState = "menu";
 
 // Player details /////////////////////////////////////////////////////////////
-var players = [];
+
 var playerRadius = 10;
 var playerCount = 0;
 
-function addPlayer() {
-    // New player gets rendered at centre of screen
-    // Save the player to the array
-    players.push({
-        index: playerCount, // Player identifier
-        x: canvas.width / 2, // Player x coord
-        y: canvas.height / 2, // Y coord
-        lastCoordUpdate: performance.now()
-    });
+const players = {
+    1: {
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        color: '#e74c3c',
+        bias: { gy: 0, gz: 0 }
+    },
+    2: {
+        x: canvas.width / 2,
+        y: canvas.height / 2,
+        color: '#3498db',
+        bias: { gy: 0, gz: 0 }
+    }
+};
 
-    playerCount++;
+// ── Grid config ──────────────────────────────────────────────
+let lastTime = null;
+
+
+// ── Last known gyro velocity per player (dead reckoning) ────────
+const lastGyro = {
+    1: { gy: 0, gz: 0 },
+    2: { gy: 0, gz: 0 },
+};
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ── Apply one gyro sample ─────────────────────────────────────
+// Uses actual elapsed time (dt) so the game loop runs at the
+// display refresh rate (~60 Hz) independent of the 50 Hz sensor.
+// Linear mapping — no cap so fast flicks travel proportionally far.
+function mapAxis(v, dt) {
+    const mag = Math.abs(v) - DEAD_ZONE;
+    if (mag <= 0) return 0;
+    return Math.sign(v) * mag * SCALE * dt;
+}
+
+function applyGyro(playerID, gy, gz, dt) {
+    const p = players[playerID];
+    if (!p) return;
+
+    // Adaptive bias correction: the LSM6DSL has a small zero-rate offset
+    // (~±0.17 rad/s) that accumulates during continuous motion. When the
+    // device is still (both axes within dead zone), slowly update the bias
+    // estimate. Subtracting it before the dead zone check means accumulated
+    // drift is corrected from the brief pauses between gestures.
+    if (Math.abs(gy) < DEAD_ZONE && Math.abs(gz) < DEAD_ZONE) {
+    p.bias.gy += (gy - p.bias.gy) * 0.05;
+    p.bias.gz += (gz - p.bias.gz) * 0.05;
+    }
+
+    gy -= p.bias.gy;
+    gz -= p.bias.gz;
+
+    const absY = Math.abs(gy);
+    const absZ = Math.abs(gz);
+
+    // Suppress the weaker axis to prevent diagonal drift
+    const useZ = absZ > DEAD_ZONE && !(absY > absZ * AXIS_BIAS);
+    const useY = absY > DEAD_ZONE && !(absZ > absY * AXIS_BIAS);
+
+    const dx = useZ ? mapAxis(-gz, dt) : 0;
+    const dy = useY ? mapAxis(gy,  dt) : 0;
+
+    p.x = clamp(p.x + dx, 0, canvas.width);
+    p.y = clamp(p.y + dy, 0, canvas.height);
 }
 
 function renderPlayers() {
-    for (let player of players) {
-        ctx.fillStyle = "blue";
+
+    for (const player of Object.values(players)) {
+        ctx.fillStyle = player.color;
         ctx.beginPath();
-        ctx.arc(cursorX, cursorY, 10, 0, 2 * Math.PI);
+        ctx.arc(
+            player.x,
+            player.y,
+            playerRadius,
+            0,
+            Math.PI * 2
+        );
         ctx.fill();
     }
 }
@@ -190,22 +259,33 @@ socket.onopen = () => {
 socket.onmessage = (event) => {
     let data = JSON.parse(event.data);
 
-    player = players[data.player - 1];
-    gy = data.gy;
-    gz = data.gz;
+    // Check if IMU data
+    if ("player" in data) {
+        lastGyro[data.player] = {
+            gy: data.gy,
+            gz: data.gz
+        };
+    } else {
+        // Otherwise, gesture data
+        if (data.gesture === "START") {
+            startGame();
+        }
 
-    // Calculate time elapsed since player coords last updated
-    let currentTime = performance.now();
-    let deltaTime = currentTime - player.lastCoordUpdate; // JSON players are 1-indexed
+        if (data.gesture === "PAUSE") {
 
-    // Update player position
-    player.x += gy * deltaTime;
-    player.y += gz * deltaTime;
+            if (gameState === "running") {
+                gameState = "paused";
+            }
+            else if (gameState === "paused") {
+                gameState = "running";
+            }
+        }
 
-    player.lastCoordUpdate = currentTime;
+        if (data.gesture === "RESTART") {
+            startGame();
+        }
+    }
 };
-
-
 
 
 // Game Functions //////////////////////////////////////////////////////////////////
@@ -239,34 +319,29 @@ function renderMenu() {
 function startGame() {
 
     eagles = [];
-    addPlayer();
-    addPlayer();
+    //addPlayer();
+    //addPlayer();
 
     gameState = "running";
 }
 
 // Game running
-function updateGameplay() {
-    // Check if an eagle has died
-    for (let eagle of eagles) {
-        let cdx = cursorX - eagle.x;
-        let cdy = cursorY - eagle.y;
-        // Calculate distance of cursor from eagle
-        let cursorDist = Math.sqrt(cdx * cdx + cdy * cdy);
-        if (cursorDist < eagleRadius) {
-            eagle.alive = false;
-        }
-    }
-    // Filter out dead eagles
-    eagles = eagles.filter(eagle => eagle.alive);
-    // Move alive eagles
-    updateEaglePos();
-}
-
 function updateGameplayWireless() {
+
+    let timestamp = performance.now();
+
+    if (lastTime === null) lastTime = timestamp;
+    const dt = Math.min((timestamp - lastTime) / 1000, 0.05); // cap at 50ms
+    lastTime = timestamp;
+
+    for (const id of Object.keys(players)) {
+    const g = lastGyro[id];
+    applyGyro(parseInt(id), g.gy, g.gz, dt);
+    }
+
     // Check if an eagle has died
     for (let eagle of eagles) {
-        for (let player of players) {
+        for (const player of Object.values(players)) {
             let cdx = player.x - eagle.x;
             let cdy = player.y - eagle.y;
             // Calcuuate distance of player cursor from eagle
@@ -315,7 +390,7 @@ function renderGameOver() {
     ctx.font = "24px Arial";
 
     ctx.fillText(
-        "U LOST LOL press r to restart ig",
+        "Oops you lost gesture to restart",
         canvas.width / 2,
         canvas.height / 2 + 60
     );
@@ -332,7 +407,7 @@ function gameLoop() {
             break;
 
         case "running":
-            updateGameplay();
+            updateGameplayWireless();
             drawGame();
             break;
 

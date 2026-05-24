@@ -1,96 +1,146 @@
-import asyncio
-import json
-import threading
 import serial
-import http.server
-import socketserver
+import json
+import asyncio
 import websockets
-from websockets.asyncio.server import serve
+import threading
+import time
+import os
+from http.server import HTTPServer, SimpleHTTPRequestHandler
+import logging
+import paho.mqtt.client as mqtt
 
-# Global for storinng any newly incoming data
+# Serial comms
+SERIAL_PORT = "/dev/tty.usbmodem11401"
+BAUD_RATE   = 115200
+# Webpage comms
+WS_PORT     = 6767
+HTTP_PORT   = 5000
+# MQTT comms
+BROKER = "localhost"
+TOPIC = "prometheus/gesture"
+
+
+# Global for storing any newly incoming serial data
 new_data = {
     "player": 0,
     "gy": 0,
     "gz":0
 }
 
-new_data_lock = threading.Lock()
+os.chdir(os.path.dirname(os.path.abspath(__file__)))
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-# HTTP GAME ###################################################################
-def start_game_server():
-    port = 5000
+clients: set = set()
+_loop: asyncio.AbstractEventLoop | None = None
 
-    serverHandler = http.server.SimpleHTTPRequestHandler
 
-    with socketserver.TCPServer(("", port), serverHandler) as server:
-        print("Started webpage")
-        server.serve_forever()
+async def broadcast(msg: str) -> None:
+    if not clients:
+        return
+    await asyncio.gather(*[c.send(msg) for c in list(clients)],
+                         return_exceptions=True)
 
-# WEBSOCKET SHIT ##############################################################
-async def handle_websocket_connection(websocket):
-    print("Client connected!")
-    
+
+async def websocket_handler(websocket) -> None:
+    clients.add(websocket)
+    logging.info(f"Browser connected ({len(clients)} client(s))")
+    try:
+        await websocket.wait_closed()
+    finally:
+        clients.discard(websocket)
+        logging.info(f"Browser disconnected ({len(clients)} client(s))")
+
+def mqtt_msg_handler(client, userdata, msg):
+
+    message = msg.payload.decode()
+    print("Received:", message)
+
+    gesture_packet = {
+        "type": "gesture",
+        "gesture": message
+    }
+
+    if _loop:
+        asyncio.run_coroutine_threadsafe(
+            broadcast(json.dumps(gesture_packet)),
+            _loop
+        )
+
+
+def serial_thread() -> None:
+    """Reads from the base node serial port and broadcasts to WebSocket."""
+    port = None
     while True:
-        # Copy over new data
-        with new_data_lock:
-            data = new_data.copy()
-
         try:
-            await websocket.send(json.dumps(data))
-            await asyncio.sleep(0.05)
-        except websockets.exceptions.ConnectionClosed:
-            print("Client disconnected")
-            break
+            if port is None or not port.is_open:
+                logging.info(f"Opening {SERIAL_PORT} ...")
+                port = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+                logging.info("Serial port open.")
 
-# SERIAL PORT SHIT ############################################################
-def open_serial_port():
-    ser = serial.Serial('COM6', 115200)
-
-    # Read from port repeatedly
-    while True:
-        line = ser.readline().decode('uft-8').strip()
-
-        if line:
-            print(line)
-            # load data into dict
+            raw = port.readline()
+            if not raw:
+                continue
+            line = raw.decode("utf-8", errors="ignore").strip()
             data = json.loads(line)
+            if _loop:
+                asyncio.run_coroutine_threadsafe(
+                    broadcast(json.dumps(data)), _loop
+                )
 
-            # Update the 'new data'
-            with new_data_lock:
-                if "player" in data:
-                    new_data["player"] = data["player"]
-                if "gy" in data:
-                    new_data["gy"] = data["gy"]
-                if "gz" in data:
-                    new_data["gz"] = data["gz"]
+        except json.JSONDecodeError:
+            pass
+        except serial.SerialException as e:
+            logging.warning(f"Serial error: {e}")
+            if port:
+                try:
+                    port.close()
+                except Exception:
+                    pass
+                port = None
+            logging.info("Retrying in 2 s...")
+            time.sleep(2)
+        except Exception as e:
+            logging.warning(f"Unexpected error: {e}")
+            time.sleep(1)
 
-        else:    
-            print("oops smth went wrong reading the serial line")
+def http_thread() -> None:
+    server = HTTPServer(("localhost", HTTP_PORT), SimpleHTTPRequestHandler)
+    logging.info(f"HTTP server at http://localhost:{HTTP_PORT}/index.html")
+    server.serve_forever()
 
-# MAIN SHIT ###################################################################
-async def main():
+def mqtt_thread() -> None:
+    try:
+        # create a new client to connect to broker
+        mqtt_client = mqtt.Client()
+        mqtt_client.on_message = mqtt_msg_handler
 
-    # Start game webpage server hosting thread
-    threading.Thread(
-        target=start_game_server,
-        daemon=True # Close up game if backend program ends
-    ).start()
+        # make connection to broker and subscribe to prometheus gestures
+        mqtt_client.connect(BROKER, 1883)
+        print("MQTT 1883")
+        logging.info("MQTT connected")
+        mqtt_client.subscribe(TOPIC)
+        print("subbed to prometheus/gestures")
 
-    # Start serial port reading thread
-    threading.Thread(
-        target=open_serial_port,
-        daemon=True
-    ).start()
+        mqtt_client.loop_forever()
 
-    print("Open browser at:")
-    print("http://localhost:5000")
+    except Exception as e:
+        print("MQTT crashed:", e)
 
-    # Start websocket
-    async with serve(handle_websocket_connection, "localhost", 6767) as server:
-        print("Websocket started on ws://localhost:6767")
-        await server.serve_forever()  # Run forever
+
+
+async def main() -> None:
+    global _loop
+    _loop = asyncio.get_running_loop()
+
+    threading.Thread(target=serial_thread, daemon=True).start()
+    threading.Thread(target=http_thread, daemon=True).start()
+    threading.Thread(target=mqtt_thread, daemon=True).start()
+
+    async with websockets.serve(websocket_handler, "localhost", WS_PORT):
+        logging.info(f"WebSocket server listening on ws://localhost:{WS_PORT}")
+        await asyncio.Future()
+
 
 if __name__ == "__main__":
     asyncio.run(main())
-
 
