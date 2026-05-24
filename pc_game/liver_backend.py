@@ -1,6 +1,7 @@
 import serial
 import json
 import asyncio
+import socket
 import websockets
 import threading
 import time
@@ -10,13 +11,16 @@ import logging
 import paho.mqtt.client as mqtt
 
 # Serial comms
-SERIAL_PORT = "/dev/tty.usbmodem11401"
+#SERIAL_PORT = "/dev/tty.usbmodem11401"
+#SERIAL_PORT = "/dev/ttyACM0"
+SERIAL_PORT = "COM7"
 BAUD_RATE   = 115200
 # Webpage comms
 WS_PORT     = 6767
 HTTP_PORT   = 5000
 # MQTT comms
 BROKER = "localhost"
+#BROKER = "172.27.128.1"
 TOPIC = "prometheus/gesture"
 
 
@@ -111,20 +115,27 @@ def http_thread() -> None:
 def mqtt_thread() -> None:
     try:
         # create a new client to connect to broker
-        mqtt_client = mqtt.Client()
+        mqtt_client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         mqtt_client.on_message = mqtt_msg_handler
 
         # make connection to broker and subscribe to prometheus gestures
         mqtt_client.connect(BROKER, 1883)
         print("MQTT 1883")
+        mqtt_client.socket().setsockopt(
+                socket.IPPROTO_TCP, socket.TCP_NODELAY, 1
+            )
         logging.info("MQTT connected")
         mqtt_client.subscribe(TOPIC)
         print("subbed to prometheus/gestures")
 
         mqtt_client.loop_forever()
 
+    except ConnectionRefusedError:
+            print("MQTT broker not available, retrying in 2s...")
+            time.sleep(2)
     except Exception as e:
         print("MQTT crashed:", e)
+        time.sleep(2)
 
 
 

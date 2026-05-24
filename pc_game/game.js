@@ -5,7 +5,7 @@
 
 
 const DEAD_ZONE  = 0.18;  // rad/s — ignore noise below this
-const SCALE      = 140.0; // linear scale factor (tune this)
+const SCALE      = 450.0; // linear scale factor (tune this)
 const AXIS_BIAS  = 3.5;   // diagonal suppression
 
 // Canvas information /////////////////////////////////////////////////////////
