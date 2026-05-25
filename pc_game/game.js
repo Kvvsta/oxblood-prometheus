@@ -5,7 +5,7 @@
 
 
 const DEAD_ZONE  = 0.18;  // rad/s — ignore noise below this
-const SCALE      = 450.0; // linear scale factor (tune this)
+const SCALE      = 470.0; // linear scale factor (tune this)
 const AXIS_BIAS  = 3.5;   // diagonal suppression
 
 // Canvas information /////////////////////////////////////////////////////////
@@ -20,6 +20,7 @@ canvas.width = canvas.clientWidth;
 // Game logic /////////////////////////////////////////////////////////////////
 // Game state
 var gameState = "menu";
+var gameOverAudioSent = false;
 
 // Player details /////////////////////////////////////////////////////////////
 
@@ -265,8 +266,8 @@ socket.onmessage = (event) => {
             gy: data.gy,
             gz: data.gz
         };
-    } else {
-        // Otherwise, gesture data
+    } else if ("gesture" in data) {
+        // Check if gesture data
         if (data.gesture === "START") {
             startGame();
         }
@@ -323,6 +324,7 @@ function startGame() {
     //addPlayer();
 
     gameState = "running";
+    gameOverAudioSent = false;
 }
 
 // Game running
@@ -418,8 +420,11 @@ function gameLoop() {
 
         case "gameover":
             renderGameOver();
-            // send audio cue to base node
-            socket.send(JSON.stringify({"type":"audio", "event":"game_over"}));
+            // send audio cue to base node, if not sent already
+            if (!gameOverAudioSent) {
+                socket.send(JSON.stringify({"type":"audio", "event":"game_over"}));
+                gameOverAudioSent = true;
+            }
             break;
     }
 }

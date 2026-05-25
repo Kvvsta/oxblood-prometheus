@@ -32,6 +32,7 @@ new_data = {
 }
 
 _port = None
+_port_lock = threading.Lock()
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -43,6 +44,7 @@ _loop: asyncio.AbstractEventLoop | None = None
 async def broadcast(msg: str) -> None:
     if not clients:
         return
+    print("Abt to send data to game")
     await asyncio.gather(*[c.send(msg) for c in list(clients)],
                          return_exceptions=True)
 
@@ -82,50 +84,53 @@ def serial_thread() -> None:
     """Reads from the base node serial port and broadcasts to WebSocket."""
     global _port
     while True:
-        try:
-            if _port is None or not _port.is_open:
-                logging.info(f"Opening {SERIAL_PORT} ...")
-                _port = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
-                logging.info("Serial port open.")
+        with _port_lock:
+            try:
+                if _port is None or not _port.is_open:
+                    logging.info(f"Opening {SERIAL_PORT} ...")
+                    _port = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
+                    logging.info("Serial port open.")
 
-            raw = _port.readline()
-            if not raw:
-                continue
-            line = raw.decode("utf-8", errors="ignore").strip()
-            data = json.loads(line)
-            if _loop:
-                asyncio.run_coroutine_threadsafe(
-                    broadcast(json.dumps(data)), _loop
-                )
+                raw = _port.readline()
+                if not raw:
+                    continue
+                line = raw.decode("utf-8", errors="ignore").strip()
+                print(f"From Base: {line}")
+                data = json.loads(line)
+                if _loop:
+                    asyncio.run_coroutine_threadsafe(
+                        broadcast(json.dumps(data)), _loop
+                    )
 
-        except json.JSONDecodeError:
-            pass
-        except serial.SerialException as e:
-            logging.warning(f"Serial error: {e}")
-            if _port:
-                try:
-                    _port.close()
-                except Exception:
-                    pass
-                _port = None
-            logging.info("Retrying in 2 s...")
-            time.sleep(2)
-        except Exception as e:
-            logging.warning(f"Unexpected error: {e}")
-            time.sleep(1)
+            except json.JSONDecodeError:
+                pass
+            except serial.SerialException as e:
+                logging.warning(f"Serial error: {e}")
+                if _port:
+                    try:
+                        _port.close()
+                    except Exception:
+                        pass
+                    _port = None
+                logging.info("Retrying in 2 s...")
+                time.sleep(2)
+            except Exception as e:
+                logging.warning(f"Unexpected error: {e}")
+                time.sleep(1)
 
 def serial_write(data: str) -> None:
     global _port
-    if _port and _port.is_open:
-        try:
-            _port.write(data.encode('utf-8'))
-            # Flush the port to ensure packet is sent immediately
-            _port.flush()
-            print(f"Serial wrote {data!r} to base nnode")
-        except Exception as e:
-            print(f"waa serial write didnt work {e}")
-    else:
-        print("tried sending to base nnode, but port aint even open")
+    with _port_lock:
+        if _port and _port.is_open:
+            try:
+                _port.write(data.encode('utf-8'))
+                # Flush the port to ensure packet is sent immediately
+                _port.flush()
+                print(f"To Base: {data!r}")
+            except Exception as e:
+                print(f"waa serial write didnt work {e}")
+        else:
+            print("tried sending to base nnode, but port aint even open")
 
 def http_thread() -> None:
     server = HTTPServer(("localhost", HTTP_PORT), SimpleHTTPRequestHandler)
