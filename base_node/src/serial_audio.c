@@ -9,14 +9,17 @@
 #include <string.h>
 
 #define RX_BUF_SIZE 128
+#define SERIAL_AUDIO_STACK_SIZE 2048
+#define SERIAL_AUDIO_PRIORITY 7
 
 static const struct device *uart_dev = DEVICE_DT_GET(DT_CHOSEN(zephyr_console));
 
 static char rx_buf[RX_BUF_SIZE];
 static size_t rx_len;
 
+
 /*
- * Very small JSON/event parser.
+ * JSON/event parser.
  *
  * Expected input from bridge.py:
  *
@@ -36,46 +39,50 @@ static void process_line(const char *line)
 	}
 
 	if (strstr(line, "eagle_killed") != NULL) {
-		audio_out_play_event("eagle_killed");
+		audio_out_queue_event("eagle_killed");
 	} else if (strstr(line, "game_over") != NULL) {
-		audio_out_play_event("game_over");
+		audio_out_queue_event("game_over");
 	} else {
 		json_emit_status("audio_rx", "unknown audio event");
 	}
 }
 
-static void uart_cb(const struct device *dev, void *user_data)
-{
-	ARG_UNUSED(user_data);
+static void serial_audio_thread(void *a, void *b, void *c) {
 
-	while (uart_irq_update(dev) && uart_irq_is_pending(dev)) {
-		if (!uart_irq_rx_ready(dev)) {
-			continue;
-		}
+    while (1) {
+        unsigned char c;
 
-		uint8_t c;
+        while (uart_poll_in(uart_dev, &c) == 0) {
+            if (c == '\r') {
+                continue;
+            }
 
-		while (uart_fifo_read(dev, &c, 1) == 1) {
-			if (c == '\r') {
-				continue;
-			}
+            if (c == '\n') {
+                rx_buf[rx_len] = '\0';
+                process_line(rx_buf);
+                rx_len = 0;
+                continue;
+            }
 
-			if (c == '\n') {
-				rx_buf[rx_len] = '\0';
-				process_line(rx_buf);
-				rx_len = 0;
-				continue;
-			}
+            if (rx_len < sizeof(rx_buf) - 1) {
+                rx_buf[rx_len++] = (char)c;
+            } else {
+                rx_len = 0;
+                json_emit_status("serial_rx", "line too long");
+            }
+        }
 
-			if (rx_len < sizeof(rx_buf) - 1) {
-				rx_buf[rx_len++] = (char)c;
-			} else {
-				rx_len = 0;
-				json_emit_status("serial_rx", "line too long");
-			}
-		}
-	}
+        k_sleep(K_MSEC(2));
+    }
 }
+
+K_THREAD_DEFINE(serial_audio_tid,
+                SERIAL_AUDIO_STACK_SIZE,
+                serial_audio_thread,
+                NULL, NULL, NULL,
+                SERIAL_AUDIO_PRIORITY,
+                0,
+                0);
 
 void serial_audio_init(void)
 {
@@ -83,11 +90,6 @@ void serial_audio_init(void)
 		json_emit_status("serial_audio", "uart not ready");
 		return;
 	}
-
-	rx_len = 0;
-
-	uart_irq_callback_user_data_set(uart_dev, uart_cb, NULL);
-	uart_irq_rx_enable(uart_dev);
 
 	json_emit_status("serial_audio", "ready for audio commands");
 }
