@@ -11,4 +11,5 @@ target_sources(app PRIVATE
     src/json_serial.c
     src/serial_audio.c
     src/audio_out.c
+    src/ui_display.c
 )
