@@ -1,6 +1,7 @@
 #include "serial_audio.h"
 #include "audio_out.h"
 #include "json_serial.h"
+#include "ui_display.h"
 
 #include <zephyr/device.h>
 #include <zephyr/drivers/uart.h>
@@ -35,14 +36,47 @@ static void process_line(const char *line)
 		return;
 	}
 
+	// Process score json packets
+	if (strstr(line, "\"type\":\"score\"") != NULL ||
+    strstr(line, "\"type\": \"score\"") != NULL) {
+
+		int p1 = 0;
+		int p2 = 0;
+		int high = 0;
+
+		char* p;
+
+		p = strstr(line, "\"p1\":");
+		if (p) {
+			p1 = atoi(p + 5);
+		}
+
+		p = strstr(line, "\"p2\":");
+		if (p) {
+			p2 = atoi(p + 5);
+		}
+
+		p = strstr(line, "\"high\":");
+		if (p) {
+			high = atoi(p + 7);
+		}
+
+		ui_display_update_score(p1, p2, high);
+		return;
+	}
+
+	// Process audio json packets
 	if (strstr(line, "\"type\":\"audio\"") == NULL &&
 	    strstr(line, "\"type\": \"audio\"") == NULL) {
 		return;
 	}
 
+	// Porcess event json packets 
 	if (strstr(line, "eagle_killed") != NULL) {
+		ui_display_update_audio("eagle_killed");
 		audio_out_queue_event("eagle_killed");
 	} else if (strstr(line, "game_over") != NULL) {
+		ui_display_update_audio("game_over");
 		audio_out_queue_event("game_over");
 	} else {
 		json_emit_status("audio_rx", "unknown audio event");
