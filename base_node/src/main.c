@@ -1,8 +1,8 @@
 #include "nus_client.h"
 #include "json_serial.h"
 #include "mobile_link.h"
-//#include "serial_audio.h"
-//#include "audio_out.h"
+#include "serial_audio.h"
+#include "audio_out.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/bluetooth/bluetooth.h>
@@ -19,8 +19,8 @@ int main(void) {
     json_serial_init();
     //game_state_init();
     mobile_link_start();
-    //audio_out_init();
-    //serial_audio_init();
+    audio_out_init();
+    serial_audio_init();
 
     //ui_lvgl_init();
 
