@@ -57,7 +57,7 @@ async def websocket_handler(websocket) -> None:
             try:
                 data = json.loads(msg)
 
-                if data.get("type") in ["audio", "score"]:
+                if data.get("type") in ["audio", "score", "gesture"]:
                     serial_write(json.dumps(data) + "\r\n")
             except json.JSONDecodeError:
                 print("womp womp invalid json from game")
@@ -74,6 +74,8 @@ def mqtt_msg_handler(client, userdata, msg):
         "type": "gesture",
         "gesture": message
     }
+
+    serial_write(json.dumps(gesture_packet) + "\r\n")
 
     if _loop:
         asyncio.run_coroutine_threadsafe(
