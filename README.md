@@ -19,13 +19,14 @@ In our video game, the player takes the role of Hercules, wielding a physical wa
 
 This is an endless game, akin to something like the "No-Internet Dinosaur game" by Google — there is no end goal or way to definitively beat the game. The longer the game runs, the more difficult it becomes: the rate of eagle spawns and their velocity increase proportionally with time.
 
-The game system is built across three embedded nodes and a PC software stack:
+The game system is built across four embedded nodes and a PC software stack:
 
-- **Mobile Node** — held in the player's hand, continuously samples a LSM6DSL gyroscope sensor, extracting angular velocity to measure the direction and speed of the player's wrist motions. These wrist motions directly correspond to the movement of the player icon in the game, in the same manner that a mouse would affect the cursor.
-- **Base Node** — receives the gyroscope data, applies a Kalman filter to improve accuracy and reduce instability, then sends the filtered data to the PC via a USB serial connection using JSON encoding. It is received by a Python bridge and translated into player movement on an HTML canvas game rendered in the browser.
-- **Camera Node (ESP32-S3-EYE)** — provides camera-based game controls using colour detection. The camera is mounted facing the player, who can hold up coloured cards to perform in-game actions (e.g. red = restart, blue = pause/resume, green = increase difficulty). The camera communicates directly with the PC software via Wi-Fi (MQTT).
+- **Mobile Node 1 (PROMETHEUS-P1)** — held in the player's hand, continuously samples a LSM6DSL gyroscope sensor, extracting angular velocity to measure the direction and speed of the player's wrist motions. These wrist motions directly correspond to the movement of the player icon in the game, in the same manner that a mouse would affect the cursor.
+- **Mobile Node 2 (PROMETHEUS-P2)** — a second identical mobile node, also sampling a LSM6DSL gyroscope and advertising over BLE NUS as a peripheral.
+- **Base Node (M5Stack Core2)** — receives the gyroscope data from both mobile nodes, applies a Kalman filter to improve accuracy and reduce instability, then sends the filtered data to the PC via a USB serial connection using JSON encoding. It is received by a Python bridge and translated into player movement on an HTML canvas game rendered in the browser.
+- **Camera Node (ESP32-S3-EYE)** — provides camera-based game controls using colour detection. The camera is mounted facing the player, who can hold up coloured cards to perform in-game actions (e.g. red = start, orange = pause, purple = restart). The camera communicates directly with the PC software via Wi-Fi (MQTT).
 
-Our chosen actuator is a MAX98357 I2S digital speaker connected to the base node, which plays sound effects such as eagle screeches and hit sounds triggered by game events relayed from the PC over USB serial.
+Our chosen actuator is the M5Stack Core2's built-in speaker on the base node, which plays sound effects such as hit sounds triggered by game events relayed from the PC over USB serial.
 
 Overall, this project demonstrates sensor fusion, embedded real-time processing, multi-protocol wireless networking, and IoT principles, all developed within the Zephyr RTOS environment.
 
@@ -65,20 +66,21 @@ Overall, this project demonstrates sensor fusion, embedded real-time processing,
 
 | Step | From | To | Protocol | Payload |
 |------|------|----|----------|---------|
-| 1 | Mobile Node | Base Node | BLE NUS | `{type: "imu", seq, gyro_y, gyro_z, t}` |
-| 2 | Base Node | PC Backend | Serial JSON | `{type: "imu", seq, gyro_y, gyro_z, t}` |
-| 3 | PC Backend | Web Game | WebSocket | `{type: "state", player, eagles, score}` |
-| 4 | Camera Node | PC Backend | MQTT (Mosquitto) | `{type: "gesture", gesture: "pause", confidence: 0.92}` |
-| 5 | PC Backend | Base Node | Serial JSON | `{type: "audio", event: "eagle_killed"}` |
-| 6 | Base Node | Speaker | I2S | Audio stream |
+| 1 | Mobile Node 1 | Base Node | BLE NUS | `{type: "imu", seq, gyro_y, gyro_z, t}` |
+| 2 | Mobile Node 2 | Base Node | BLE NUS | `{type: "imu", seq, gyro_y, gyro_z, t}` |
+| 3 | Base Node | PC Backend | Serial JSON | `{type: "imu", seq, gyro_y, gyro_z, t}` |
+| 4 | PC Backend | Web Game | WebSocket | `{type: "state", player, eagles, score}` |
+| 5 | Camera Node | PC Backend | MQTT (Mosquitto) | `{type: "gesture", gesture: "pause", confidence: 0.92}` |
+| 6 | PC Backend | Base Node | Serial JSON | `{type: "audio", event: "eagle_killed"}` |
+| 7 | Base Node | Speaker | I2S | Audio stream |
 | 1.2 | Mobile Node | Base Node | BLE NUS | Re-advertise if connection lost |
 
 ---
 
 ## Sensor Integration
 
-### LSM6DSL Accelerometer & Gyrometer (Mobile Node)
-The gyroscope detects player movement by sampling angular velocity on the Y and Z axes (radians/s). The X axis is not used as the game is 2D. When facing the PC monitor, the user moves their wrist vertically and horizontally to control the player icon. Accelerometer data is not required. Data is sent to the base node via BLE NUS.
+### LSM6DSL Accelerometer & Gyrometer (Mobile Nodes)
+The gyroscope detects player movement by sampling angular velocity on the Y and Z axes (radians/s). The X axis is not used as the game is 2D. When facing the PC monitor, the user moves their wrist vertically and horizontally to control the player icon. Accelerometer data is not required. Data is sent to the base node via BLE NUS. Both mobile nodes run identical firmware, distinguished by their BLE device names (`PROMETHEUS-P1` and `PROMETHEUS-P2`).
 
 ### ESP32-S3-EYE Camera (Camera Node)
 The camera performs on-device colour detection to trigger in-game events. Since only simple colour thresholds are needed (not full gesture recognition), the ESP32 processes frames locally without OpenCV, and transmits compact JSON messages to the PC via MQTT (e.g. `{"gesture": "restart"}`).
@@ -87,9 +89,9 @@ The camera performs on-device colour detection to trigger in-game events. Since 
 
 ## Wireless Network Communication & IoT Protocols
 
-1. **Mobile Node → Base Node via BLE NUS**
+1. **Mobile Nodes → Base Node via BLE NUS**
    - Provides stable connection with fast reconnection (~3s)
-   - Mobile node advertises as peripheral; base node acts as central
+   - Mobile nodes advertise as peripherals; base node acts as central, maintaining up to 2 simultaneous connections
    - Avoids broadcasting movement data unnecessarily
 
 2. **Base Node → PC via USB Serial (JSON)**
@@ -98,8 +100,8 @@ The camera performs on-device colour detection to trigger in-game events. Since 
    - More stable with lower packet drop rate
    - PC also sends sound trigger commands back to base node
 
-3. **Base Node → Speaker via I²S**
-   - Wired connection for in-game audio
+3. **Base Node → M5Stack Speaker via I²S**
+   - Wired connection for in-game audio using the M5Stack Core2's built-in speaker
    - Sound effects stored as PCM arrays, played when triggered by PC
 
 4. **Camera Node → PC via MQTT (Wi-Fi)**
@@ -125,9 +127,9 @@ The camera performs on-device colour detection to trigger in-game events. Since 
 
 1. The player tilts their wrist. The mobile node reads raw gyroscope data.
 2. The mobile node filters the data and sends it via BLE. The base node forwards it to the PC, where it is interpreted into a movement vector and updates the game state.
-3. The camera detects a blue card and publishes a `pause` command via MQTT. The PC receives it and pauses the game.
-4. Player holds up a blue card again, and the PC resumes the game.
-5. If the player collides with an eagle, the PC increases the score and sends an audio event to the base node to play a `hit` sound through the MAX98357 speaker.
+3. The camera detects an orange card and publishes a `pause` command via MQTT. The PC receives it and pauses the game.
+4. Player holds up an orange card again, and the PC resumes the game.
+5. If the player collides with an eagle, the PC increases the score and sends an audio event to the base node to play a `hit` sound through the M5Stack speaker.
 6. Telemetry (packet loss, latency, FPS, score) is shown on a dashboard for evaluation.
 
 ---
@@ -136,7 +138,7 @@ The camera performs on-device colour detection to trigger in-game events. Since 
 
 | Task | Target Date |
 |------|-------------|
-| Mobile Node (BLE NUS + IMU) | May 17 |
+| Mobile Nodes (BLE NUS + IMU) | May 17 |
 | Base Node (BLE central, I2S) | May 17 |
 | Camera Node (Colour detection) | May 17 |
 | PC Backend (MQTT, WebSocket) | May 19 |
@@ -151,20 +153,20 @@ The camera performs on-device colour detection to trigger in-game events. Since 
 
 | Library | Header | Purpose |
 |---------|--------|---------|
-| Bluetooth | `<zephyr/bluetooth/bluetooth.h>` | Manages BLE connection; mobile = peripheral, base = central |
+| Bluetooth | `<zephyr/bluetooth/bluetooth.h>` | Manages BLE connections; mobile nodes = peripheral, base = central (up to 2 connections) |
 | Bluetooth NUS | `<zephyr/bluetooth/services/nus.h>` | Streams JSON-encoded gyroscope readings via BLE notifications |
 | Zephyr Kernel API | `<zephyr/kernel.h>` | Threads and message queues |
 | Zephyr Device API | `<zephyr/device.h>` | Obtain and verify hardware peripheral handles |
 | Zephyr Sensor API | `<zephyr/drivers/sensor.h>` | Interfaces with LSM6DSL over SPI; samples gyroscope via `sensor_sample_fetch` / `sensor_channel_get` |
 | Zephyr Video API | `<zephyr/drivers/video.h>` | Captures frames on ESP32-S3-EYE for on-device colour detection |
-| I2S | `<zephyr/drivers/i2s.h>` | Streams PCM audio to MAX98357 speaker on the base node |
+| I2S | `<zephyr/drivers/i2s.h>` | Streams PCM audio to M5Stack built-in speaker on the base node |
 | MQTT | — | Used on ESP32-S3-EYE to send colour detection results to PC |
 
 ---
 
 ## Equipment
 
-- 2× Seeed Xiao nRF52840
+- 2× Seeed XIAO nRF52840 (Mobile Nodes)
+- 1× M5Stack Core2 ESP32 (Base Node)
 - 1× ESP32-S3-EYE Camera
-- 1× M5 Stack Speaker (MAX98357 I2S Audio Platform)
 - 1× PC
