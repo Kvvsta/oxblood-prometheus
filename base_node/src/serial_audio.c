@@ -10,6 +10,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stddef.h>
+#include <stdlib.h>
 
 #define RX_BUF_SIZE 128
 #define LINE_BUF_SIZE 128
@@ -71,7 +72,7 @@ static void process_line(const char *line)
 		return;
 	}
 
-	// Porcess event json packets 
+	// Process event json packets 
 	if (strstr(line, "eagle_killed") != NULL) {
 		ui_display_update_audio("eagle_killed");
 		audio_out_queue_event("eagle_killed");
