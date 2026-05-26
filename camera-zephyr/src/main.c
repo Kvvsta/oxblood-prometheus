@@ -8,7 +8,6 @@
 #include <zephyr/kernel.h>
 #include <zephyr/device.h>
 #include <zephyr/drivers/video.h>
-#include <zephyr/drivers/video-controls.h>
 #include <zephyr/drivers/display.h>
 #include <zephyr/logging/log.h>
 #include "colour_detect.h"
@@ -129,9 +128,6 @@ int main(void)
 	}
 
 	ret = app_setup_video_format(video_dev, &fmt);
-	if (ret < 0) goto err;
-
-	ret = app_setup_video_controls(video_dev);
 	if (ret < 0) goto err;
 
 	ret = video_get_caps(video_dev, &caps);
