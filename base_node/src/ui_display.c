@@ -4,6 +4,7 @@
 #include <zephyr/sys/printk.h>
 #include <lvgl.h>
 #include <stdio.h>
+#include <math.h>
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/display.h>
 
@@ -19,6 +20,7 @@ static lv_obj_t *label_audio;
 static lv_obj_t *label_p1_score;
 static lv_obj_t *label_p2_score;
 static lv_obj_t *label_high_score;
+static lv_obj_t *label_gesture;
 
 void ui_display_init(void) {
 
@@ -53,29 +55,35 @@ void ui_display_init(void) {
 	label_p2 = lv_label_create(screen);
 	lv_label_set_text(label_p2, "P2 gy: -- gz: --");
 	lv_obj_set_style_text_color(label_p2, lv_color_white(), LV_PART_MAIN);
-	lv_obj_align(label_p2, LV_ALIGN_TOP_LEFT, 10, 75);
+	lv_obj_align(label_p2, LV_ALIGN_TOP_LEFT, 10, 80);
 
-    // Score labels
-	label_p1_score = lv_label_create(screen);
-    lv_label_set_text(label_p1_score, "P1 Score: 0");
-    lv_obj_set_style_text_color(label_p1_score, lv_color_white(), LV_PART_MAIN);
-    lv_obj_align(label_p1_score, LV_ALIGN_TOP_LEFT, 10, 115);
-
-    label_p2_score = lv_label_create(screen);
-    lv_label_set_text(label_p2_score, "P2 Score: 0");
-    lv_obj_set_style_text_color(label_p2_score, lv_color_white(), LV_PART_MAIN);
-    lv_obj_align(label_p2_score, LV_ALIGN_TOP_LEFT, 10, 145);
-
-    label_high_score = lv_label_create(screen);
-    lv_label_set_text(label_high_score, "High Score: 0");
-    lv_obj_set_style_text_color(label_high_score, lv_color_white(), LV_PART_MAIN);
-    lv_obj_align(label_high_score, LV_ALIGN_TOP_LEFT, 10, 175);
+    // Gesture label
+    label_gesture = lv_label_create(screen);
+    lv_label_set_text(label_gesture, "Gesture: NONE");
+    lv_obj_set_style_text_color(label_gesture, lv_color_white(), LV_PART_MAIN);
+    lv_obj_align(label_gesture, LV_ALIGN_TOP_LEFT, 10, 120);
 
     // Audio labels
 	label_audio = lv_label_create(screen);
 	lv_label_set_text(label_audio, "Audio: ready");
 	lv_obj_set_style_text_color(label_audio, lv_color_white(), LV_PART_MAIN);
-	lv_obj_align(label_audio, LV_ALIGN_TOP_LEFT, 10, 215);
+	lv_obj_align(label_audio, LV_ALIGN_TOP_LEFT, 10, 155);
+
+    // Score labels
+	label_p1_score = lv_label_create(screen);
+    lv_label_set_text(label_p1_score, "P1 Score: 0");
+    lv_obj_set_style_text_color(label_p1_score, lv_color_white(), LV_PART_MAIN);
+    lv_obj_align(label_p1_score, LV_ALIGN_TOP_LEFT, 175, 45);
+
+    label_p2_score = lv_label_create(screen);
+    lv_label_set_text(label_p2_score, "P2 Score: 0");
+    lv_obj_set_style_text_color(label_p2_score, lv_color_white(), LV_PART_MAIN);
+    lv_obj_align(label_p2_score, LV_ALIGN_TOP_LEFT, 175, 80);
+
+    label_high_score = lv_label_create(screen);
+    lv_label_set_text(label_high_score, "High Score: 0");
+    lv_obj_set_style_text_color(label_high_score, lv_color_white(), LV_PART_MAIN);
+    lv_obj_align(label_high_score, LV_ALIGN_TOP_LEFT, 175, 115);
 
 	lv_timer_handler();
 }
@@ -123,6 +131,19 @@ void ui_display_update_audio(const char *event) {
 	if (label_audio) {
 		lv_label_set_text(label_audio, buf);
 	}
+}
+
+void ui_display_update_gesture(const char *gesture) {
+    char buf[64];
+
+    snprintf(buf,
+             sizeof(buf),
+             "Gesture: %s",
+             gesture ? gesture : "NONE");
+
+    if (label_gesture) {
+        lv_label_set_text(label_gesture, buf);
+    }
 }
 
 void ui_display_tick(void) {
