@@ -21,8 +21,9 @@ int main(void) {
     ui_display_init();
     mobile_link_start();
     audio_out_init();
-    serial_audio_init();
+    serial_init();
 
+    // Enable bluetooth stack 
     err = bt_enable(NULL);
     if (err) {
         printk("{\"type\":\"status\",\"status\":\"bt_enable_failed\","
@@ -31,14 +32,14 @@ int main(void) {
 		return 0;
     }
 
-    json_emit_status("bluetooth", "ready");
+    json_emit_status("bluetooth", "ready"); // Bluetooth ready status
 
+    // Initialise and start base scanning/conneting to mobile nodes
     nus_client_init();
-
     (void)nus_client_start();
         
     while (1) {
-
+        // m5core LVGL updated regularly 
         ui_display_tick();
         k_sleep(K_MSEC(10));
     }
