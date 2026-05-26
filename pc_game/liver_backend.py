@@ -68,9 +68,10 @@ async def websocket_handler(websocket) -> None:
                     global latest_score_packet
                     latest_score_packet = data
                     serial_write(json.dumps(data) + "\r\n")
-
-                elif data.get("type") in ["audio", "gesture"]:
+                
+                elif data.get("type") in ["audio", "gesture", "winner"]:
                     serial_write(json.dumps(data) + "\r\n")
+                    
             except json.JSONDecodeError:
                 print("womp womp invalid json from game")
     finally:
