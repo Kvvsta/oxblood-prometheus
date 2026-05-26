@@ -83,7 +83,8 @@ void ui_display_init(void) {
 void ui_display_update_imu(int player, float gy, float gz) {
 	char buf[64];
 
-	snprintf(buf, sizeof(buf), "P%d gy: %.1f gz: %.1f", player, gy, gz);
+	snprintf(buf, sizeof(buf), "P%d gy: %5.1f gz: %5.1f", player, 
+                (double)gy, (double)gz);
 
 	if (player == 1 && label_p1) {
 		lv_label_set_text(label_p1, buf);
