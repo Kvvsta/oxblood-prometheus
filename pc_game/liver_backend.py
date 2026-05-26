@@ -24,6 +24,14 @@ BROKER = "localhost"
 #BROKER = "172.27.128.1"
 TOPIC = "prometheus/gesture"
 
+# Global for storing player score data
+latest_score_packet = {
+    "type": "score",
+    "p1": 0,
+    "p2": 0,
+    "high": 0
+}
+
 # Global for storing any newly incoming serial data
 new_data = {
     "player": 0,
@@ -56,7 +64,12 @@ async def websocket_handler(websocket) -> None:
             try:
                 data = json.loads(msg)
 
-                if data.get("type") in ["audio", "score", "gesture"]:
+                if data.get("type") == "score":
+                    global latest_score_packet
+                    latest_score_packet = data
+                    serial_write(json.dumps(data) + "\r\n")
+
+                elif data.get("type") in ["audio", "gesture"]:
                     serial_write(json.dumps(data) + "\r\n")
             except json.JSONDecodeError:
                 print("womp womp invalid json from game")
@@ -86,39 +99,48 @@ def serial_thread() -> None:
     """Reads from the base node serial port and broadcasts to WebSocket."""
     global _port
     while True:
-        with _port_lock:
-            try:
+        try: 
+            with _port_lock:
+                
                 if _port is None or not _port.is_open:
                     logging.info(f"Opening {SERIAL_PORT} ...")
                     _port = serial.Serial(SERIAL_PORT, BAUD_RATE, timeout=1)
                     logging.info("Serial port open.")
+                    
+                port = _port
 
-                raw = _port.readline()
-                if not raw:
-                    continue
-                line = raw.decode("utf-8", errors="ignore").strip()
-                print(f"From Base: {line}")
-                data = json.loads(line)
-                if _loop:
-                    asyncio.run_coroutine_threadsafe(
-                        broadcast(json.dumps(data)), _loop
-                    )
+            raw = port.readline()
+            if not raw:
+                continue
+            line = raw.decode("utf-8", errors="ignore").strip()
+            print(f"From Base: {line}")
 
-            except json.JSONDecodeError:
-                pass
-            except serial.SerialException as e:
-                logging.warning(f"Serial error: {e}")
+            # Update cashed score
+            if '"status":"display"' in line and '"detail":"ready"' in line:
+                serial_write(json.dumps(latest_score_packet) + "\r\n")
+
+            data = json.loads(line)
+            if _loop:
+                asyncio.run_coroutine_threadsafe(
+                    broadcast(json.dumps(data)), _loop
+                )
+
+        except json.JSONDecodeError:
+            pass
+        except serial.SerialException as e:
+            logging.warning(f"Serial error: {e}")
+            with _port_lock:
                 if _port:
                     try:
                         _port.close()
                     except Exception:
                         pass
                     _port = None
-                logging.info("Retrying in 2 s...")
-                time.sleep(2)
-            except Exception as e:
-                logging.warning(f"Unexpected error: {e}")
-                time.sleep(1)
+            logging.info("Retrying in 2 s...")
+            time.sleep(2)
+        except Exception as e:
+            logging.warning(f"Unexpected error: {e}")
+            time.sleep(1)
 
 def serial_write(data: str) -> None:
     global _port

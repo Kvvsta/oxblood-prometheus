@@ -28,7 +28,7 @@ K_THREAD_DEFINE(audio_tid, AUDIO_STACK_SIZE, audio_thread, NULL, NULL, NULL,
                 AUDIO_PRIORITY, 0, 0);
 
 /* 
- * I2S DMA buffers should be in non-cache memory on ESP32.
+ * I2S DMA buffers are in non-cache memory on ESP32.
  * Each slab block holds one stereo audio block.
  */
 K_MEM_SLAB_DEFINE_IN_SECT_STATIC(i2s_mem_slab, __nocache, BLOCK_SIZE, BLOCK_COUNT, 4);
@@ -187,14 +187,26 @@ void audio_out_play_event(const char *event)
 	}
 
 	if (strcmp(event, "eagle_killed") == 0) {
+		// Eagle killed sound effect
 		static const int eagle_freqs[] = {
-			1800, 2400, 3200, 2600, 3600, 3000, 2200, 1800
+			1400,
+			1800,
+			2400,
+			3200,
+			3800,
+			3400,
+			3900,
+			3200,
+			2600,
+			2100,
+			1700
 		};
 
 		json_emit_audio_debug("eagle_killed", "eagle_screech");
 		play_tone_sequence(eagle_freqs, ARRAY_SIZE(eagle_freqs));
 		return;
 	} else if (strcmp(event, "game_over") == 0) {
+		// Game over sound effect 
 		static const int game_over_freqs[] = {
 			260, 260, 260, 260,
 			0, 0,
