@@ -23,13 +23,23 @@ static char line_buf[LINE_BUF_SIZE];
 static size_t rx_len;
 static K_SEM_DEFINE(line_ready_sem, 0, 1);
 
+void serial_processing_thread(void *a, void *b, void *c);
+K_THREAD_DEFINE(serial_audio_tid,
+                SERIAL_AUDIO_STACK_SIZE,
+                serial_processing_thread,
+                NULL, NULL, NULL,
+                SERIAL_AUDIO_PRIORITY,
+                0,
+                0);
+				
+
 /*
- * JSON/event parser.
+ * Parse JSON packets from the PC backend.
  *
- * Expected input from bridge.py:
- *
+ * Supported packets:
+ *     {"type":"score","p1":1,"p2":0,"high":4}
+ *     {"type":"gesture","gesture":"START"}
  *     {"type":"audio","event":"eagle_killed"}
- *
  */
 static void process_line(const char *line) {
 	if (!line) {
@@ -102,6 +112,11 @@ static void process_line(const char *line) {
 	}
 }
 
+/*
+ * UART ISR callback.
+ *
+ * Reads bytes from UART FIFO and constructs newline-terminated messages.
+ */
 static void uart_cb(const struct device *dev, void *user_data) {
 	ARG_UNUSED(user_data);
 
@@ -134,10 +149,13 @@ static void uart_cb(const struct device *dev, void *user_data) {
 	}
 }
 
-void serial_audio_init(void)
+/*
+ * Initialise UART receive interrupt handling.
+ */
+void serial_init(void)
 {
 	if (!device_is_ready(uart_dev)) {
-		json_emit_status("serial_audio", "uart not ready");
+		json_emit_status("serial", "uart not ready");
 		return;
 	}
 
@@ -146,20 +164,16 @@ void serial_audio_init(void)
 	uart_irq_callback_user_data_set(uart_dev, uart_cb, NULL);
 	uart_irq_rx_enable(uart_dev);
 
-	json_emit_status("serial_audio", "ready for audio commands");
+	json_emit_status("serial", "ready for audio commands");
 }
 
-void serial_audio_thread(void *a, void *b, void *c) {
+/*
+ * Thread that processes complete UART lines queued by uart_cb().
+ */
+void serial_processing_thread(void *a, void *b, void *c) {
     while (1) {
+		// Takes semaphore for line ready; then processes line
         k_sem_take(&line_ready_sem, K_FOREVER);
         process_line(line_buf);
     }
 }
-
-K_THREAD_DEFINE(serial_audio_tid,
-                SERIAL_AUDIO_STACK_SIZE,
-                serial_audio_thread,
-                NULL, NULL, NULL,
-                SERIAL_AUDIO_PRIORITY,
-                0,
-                0);
