@@ -17,6 +17,14 @@ canvas.width = canvas.clientWidth;
 //canvas.width  = COLS * CELL_PX;
 //canvas.height = ROWS * CELL_PX;
 
+// Background image
+const bgImage = new Image();
+bgImage.src = "prometheusoxblood.jpg";
+
+function drawBackground() {
+    ctx.drawImage(bgImage, 0, 0, canvas.width, canvas.height);
+}
+
 // Game logic /////////////////////////////////////////////////////////////////
 // Game state
 
@@ -310,13 +318,16 @@ function renderEagles() {
 }
 
 // Prometheus /////////////////////////////////////////////////////////////////
-// TODO maybe implement like health bar or some shit idk
 function renderPrometheus() {
+    // Small glowing liver — the target eagles head toward
+    ctx.save();
+    ctx.shadowColor = "rgba(180, 30, 30, 0.9)";
+    ctx.shadowBlur = 18;
     ctx.beginPath();
-    // draw a circle halfway down page
-    ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, 2 * Math.PI);
-    ctx.fillStyle = "maroon";
+    ctx.arc(canvas.width / 2, canvas.height / 2, 12, 0, 2 * Math.PI);
+    ctx.fillStyle = "#8b1a1a";
     ctx.fill();
+    ctx.restore();
 }
 
 // Connect to the server (MAKE SURE LIVER BACKEND.PY RUNNING)
@@ -368,29 +379,43 @@ socket.onmessage = (event) => {
 
 // Game Functions //////////////////////////////////////////////////////////////////
 
+function drawTitle() {
+    ctx.save();
+    ctx.textAlign = "center";
+    ctx.font = "72px 'Caesar Dressing'";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = "rgb(240, 218, 160)";
+    ctx.fillText("OXBLOOD PROMETHEUS", canvas.width / 2, 90);
+    ctx.restore();
+}
+
 // Menu
 function renderMenu() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackground();
+    drawTitle();
 
-    ctx.fillStyle = "white";
-
-    ctx.font = "48px Arial";
+    // Dark banner behind menu text for readability
+    const bx = canvas.width / 2;
+    const by = canvas.height / 2;
+    ctx.save();
+    ctx.fillStyle = "rgba(15, 8, 3, 0.7)";
+    ctx.roundRect(bx - 480, by - 50, 960, 130, 10);
+    ctx.fill();
 
     ctx.textAlign = "center";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+    ctx.shadowBlur = 8;
 
-    ctx.fillText(
-        "Shoot the eagles before they reach Prometheus. Show no mercy.",
-        canvas.width / 2,
-        canvas.height / 2
-    );
+    ctx.font = "36px 'Caesar Dressing'";
+    ctx.fillStyle = "rgb(240, 218, 160)";
+    ctx.fillText("Shoot the eagles before they reach Prometheus.", bx, by + 10);
 
-    ctx.font = "24px Arial";
-
-    ctx.fillText(
-        "Show RED card to begin. Show PURPLE card to pause.",
-        canvas.width / 2,
-        canvas.height / 2 + 60
-    );
+    ctx.font = "24px 'Caesar Dressing'";
+    ctx.fillStyle = "rgb(210, 190, 140)";
+    ctx.fillText("Show RED card to begin.  Show ORANGE card to pause.", bx, by + 60);
+    ctx.restore();
 }
 
 // Start gesture response
@@ -482,11 +507,17 @@ function drawGame() {
     // Clear screen
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // Draw background
+    drawBackground();
+
+    // Draw title
+    drawTitle();
+
     // Render Prometheus
     renderPrometheus();
     // Draw player cursor (IF NO WIRELESS)
     renderCursor();
-    // Draw players (IF WIRELESS
+    // Draw players (IF WIRELESS)
     renderPlayers();
     // Render eagles
     renderEagles();
@@ -500,35 +531,41 @@ function renderPaused() {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     // PAUSED text
-    ctx.fillStyle = "white";
-    ctx.font = "48px Arial";
+    ctx.save();
+    ctx.font = "72px 'Caesar Dressing'";
     ctx.textAlign = "center";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+    ctx.shadowBlur = 14;
+    ctx.fillStyle = "rgb(240, 218, 160)";
     ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
+    ctx.restore();
 
 }
 
 function renderGameOver() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBackground();
+    drawTitle();
 
-    ctx.fillStyle = "white";
-
-    ctx.font = "48px Arial";
+    const bx = canvas.width / 2;
+    const by = canvas.height / 2;
+    ctx.save();
+    ctx.fillStyle = "rgba(15, 8, 3, 0.7)";
+    ctx.roundRect(bx - 340, by - 50, 680, 130, 10);
+    ctx.fill();
 
     ctx.textAlign = "center";
+    ctx.shadowColor = "rgba(0, 0, 0, 0.95)";
+    ctx.shadowBlur = 8;
 
-    ctx.fillText(
-        "You have failed.",
-        canvas.width / 2,
-        canvas.height / 2
-    );
+    ctx.font = "48px 'Caesar Dressing'";
+    ctx.fillStyle = "rgb(240, 218, 160)";
+    ctx.fillText("You have failed.", bx, by + 10);
 
-    ctx.font = "24px Arial";
-
-    ctx.fillText(
-        "Show RED card to restart.",
-        canvas.width / 2,
-        canvas.height / 2 + 60
-    );
+    ctx.font = "24px 'Caesar Dressing'";
+    ctx.fillStyle = "rgb(210, 190, 140)";
+    ctx.fillText("Show RED card to restart.", bx, by + 60);
+    ctx.restore();
 }
 
 
