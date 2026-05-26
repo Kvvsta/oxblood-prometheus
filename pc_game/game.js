@@ -434,6 +434,8 @@ function startGame() {
         high: highScore
     }));
 
+    sendWinnerUpdate("NONE");
+
     // Send audio ready json packet
     socket.send(JSON.stringify({
         type: "audio",
@@ -591,11 +593,30 @@ function gameLoop() {
             renderGameOver();
             // send audio cue to base node, if not sent already
             if (!gameOverAudioSent) {
+
+                let winner = "NONE";
+
+                if (p1Score > p2Score) {
+                    winner = "P1";
+                } else if (p2Score > p1Score) {
+                    winner = "P2";
+                }
+
+                sendWinnerUpdate(winner);
+                
                 socket.send(JSON.stringify({"type":"audio", "event":"game_over"}));
                 gameOverAudioSent = true;
             }
             break;
     }
+}
+
+// Send json winner update to base node
+function sendWinnerUpdate(winner) {
+    socket.send(JSON.stringify({
+        type: "winner",
+        winner: winner
+    }));
 }
 
 // Redraws window at 60FPS
