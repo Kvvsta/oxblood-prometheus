@@ -399,6 +399,7 @@ function startGame() {
     eagles = [];
     p1Score = 0; 
     p2Score = 0;
+    difficultyModifier = 0;
 
     // Send update score json packet 
     socket.send(JSON.stringify({
