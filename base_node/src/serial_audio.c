@@ -31,8 +31,7 @@ static K_SEM_DEFINE(line_ready_sem, 0, 1);
  *     {"type":"audio","event":"eagle_killed"}
  *
  */
-static void process_line(const char *line)
-{
+static void process_line(const char *line) {
 	if (!line) {
 		return;
 	}
@@ -63,6 +62,23 @@ static void process_line(const char *line)
 		}
 
 		ui_display_update_score(p1, p2, high);
+		return;
+	}
+
+	// Process gesture packets
+	if (strstr(line, "\"type\":\"gesture\"") != NULL ||
+		strstr(line, "\"type\": \"gesture\"") != NULL) {
+
+		if (strstr(line, "START")) {
+			ui_display_update_gesture("START");
+		} else if (strstr(line, "PAUSE")) {
+			ui_display_update_gesture("PAUSE");
+		} else if (strstr(line, "RESTART")) {
+			ui_display_update_gesture("RESTART");
+		} else {
+			ui_display_update_gesture("NONE");
+		}
+
 		return;
 	}
 
