@@ -1,4 +1,5 @@
 #include "ui_display.h"
+#include "json_serial.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
@@ -17,6 +18,7 @@ static lv_obj_t *label_audio;
 static lv_obj_t *label_p1_score;
 static lv_obj_t *label_p2_score;
 static lv_obj_t *label_high_score;
+static lv_obj_t *label_winner;
 static lv_obj_t *label_gesture;
 
 /*
@@ -69,7 +71,7 @@ void ui_display_init(void) {
 
     // Audio labels
 	label_audio = lv_label_create(screen);
-	lv_label_set_text(label_audio, "Audio: ready");
+	lv_label_set_text(label_audio, "Audio: READY");
 	lv_obj_set_style_text_color(label_audio, lv_color_white(), LV_PART_MAIN);
 	lv_obj_align(label_audio, LV_ALIGN_TOP_LEFT, 10, 155);
 
@@ -77,19 +79,23 @@ void ui_display_init(void) {
 	label_p1_score = lv_label_create(screen);
     lv_label_set_text(label_p1_score, "P1 Score: 0");
     lv_obj_set_style_text_color(label_p1_score, lv_color_white(), LV_PART_MAIN);
-    lv_obj_align(label_p1_score, LV_ALIGN_TOP_LEFT, 175, 45);
+    lv_obj_align(label_p1_score, LV_ALIGN_TOP_LEFT, 190, 45);
 
     label_p2_score = lv_label_create(screen);
     lv_label_set_text(label_p2_score, "P2 Score: 0");
     lv_obj_set_style_text_color(label_p2_score, lv_color_white(), LV_PART_MAIN);
-    lv_obj_align(label_p2_score, LV_ALIGN_TOP_LEFT, 175, 80);
+    lv_obj_align(label_p2_score, LV_ALIGN_TOP_LEFT, 190, 80);
+
+    label_winner = lv_label_create(screen);
+    lv_label_set_text(label_winner, "Winner: NONE");
+    lv_obj_set_style_text_color(label_winner, lv_color_white(), LV_PART_MAIN);
+    lv_obj_align(label_winner, LV_ALIGN_TOP_LEFT, 190, 120);
 
     label_high_score = lv_label_create(screen);
     lv_label_set_text(label_high_score, "High Score: 0");
     lv_obj_set_style_text_color(label_high_score, lv_color_white(), LV_PART_MAIN);
-    lv_obj_align(label_high_score, LV_ALIGN_TOP_LEFT, 175, 115);
+    lv_obj_align(label_high_score, LV_ALIGN_TOP_LEFT, 190, 155);
 
-	//lv_timer_handler();
     for (int i = 0; i < 10; i++) {
         lv_timer_handler();
         k_msleep(20);
@@ -137,6 +143,19 @@ void ui_display_update_score(int p1_score, int p2_score, int high_score) {
 	if (label_high_score) {
 		lv_label_set_text(label_high_score, buf);
 	}
+}
+
+/*
+ * Update winner label. 
+ */
+void ui_display_update_winner(const char *winner) {
+    char buf[64];
+
+    snprintf(buf, sizeof(buf), "Winner: %s", winner ? winner : "NONE");
+
+    if (label_winner) {
+        lv_label_set_text(label_winner, buf);
+    }
 }
 
 /*
