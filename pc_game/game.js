@@ -492,19 +492,17 @@ function drawGame() {
 }
 
 function renderPaused() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawGame();
 
+    // Semi-transparent dark overlay
+    ctx.fillStyle = "rgba(0, 0, 0, 0.4)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // PAUSED text
     ctx.fillStyle = "white";
-
     ctx.font = "48px Arial";
-
     ctx.textAlign = "center";
-
-    ctx.fillText(
-        "PAUSED",
-        canvas.width / 2,
-        canvas.height / 2
-    );
+    ctx.fillText("PAUSED", canvas.width / 2, canvas.height / 2);
 
 }
 
