@@ -115,7 +115,7 @@ static bool any_client_available(void) {
  */
 static bool all_clients_connected(void) {
     for (int i = 0; i < NUM_MOBILE_NODES; i++) {
-        if (clients[i].conn == NULL && !clients[i].connecting) {
+        if (clients[i].conn == NULL) {
             return false; 
         }
     }
