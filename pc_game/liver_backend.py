@@ -13,16 +13,16 @@ import paho.mqtt.client as mqtt
 # Serial comms
 #SERIAL_PORT = "/dev/tty.usbmodem11401"
 #SERIAL_PORT = "/dev/ttyACM0"
-SERIAL_PORT = "COM8"
+SERIAL_PORT = "/dev/cu.usbserial-54260615441"
+#SERIAL_PORT = "COM8"
 BAUD_RATE   = 115200
 # Webpage comms
 WS_PORT     = 6767
-HTTP_PORT   = 5000
+HTTP_PORT   = 8000
 # MQTT comms
 BROKER = "localhost"
 #BROKER = "172.27.128.1"
 TOPIC = "prometheus/gesture"
-
 
 # Global for storing any newly incoming serial data
 new_data = {
@@ -55,7 +55,8 @@ async def websocket_handler(websocket) -> None:
         async for msg in websocket:
             try:
                 data = json.loads(msg)
-                if data.get("type") == "audio":
+
+                if data.get("type") in ["audio", "score", "gesture"]:
                     serial_write(json.dumps(data) + "\r\n")
             except json.JSONDecodeError:
                 print("womp womp invalid json from game")
@@ -72,6 +73,8 @@ def mqtt_msg_handler(client, userdata, msg):
         "type": "gesture",
         "gesture": message
     }
+
+    serial_write(json.dumps(gesture_packet) + "\r\n")
 
     if _loop:
         asyncio.run_coroutine_threadsafe(

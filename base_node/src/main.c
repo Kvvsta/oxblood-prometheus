@@ -1,8 +1,9 @@
 #include "nus_client.h"
 #include "json_serial.h"
 #include "mobile_link.h"
-//#include "serial_audio.h"
-//#include "audio_out.h"
+#include "serial_audio.h"
+#include "audio_out.h"
+#include "ui_display.h"
 
 #include <zephyr/kernel.h>
 #include <zephyr/bluetooth/bluetooth.h>
@@ -17,12 +18,10 @@ int main(void) {
     printk("BASE BOOTED\n");
 
     json_serial_init();
-    //game_state_init();
+    ui_display_init();
     mobile_link_start();
-    //audio_out_init();
-    //serial_audio_init();
-
-    //ui_lvgl_init();
+    audio_out_init();
+    serial_audio_init();
 
     err = bt_enable(NULL);
     if (err) {
@@ -40,9 +39,8 @@ int main(void) {
         
     while (1) {
 
-        //ui_lvgl_update();
-
-        k_sleep(K_SECONDS(1)); 
+        ui_display_tick();
+        k_sleep(K_MSEC(10));
     }
 
     return 0;

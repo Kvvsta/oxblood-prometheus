@@ -19,7 +19,11 @@ canvas.width = canvas.clientWidth;
 
 // Game logic /////////////////////////////////////////////////////////////////
 // Game state
+
 var gameState = "menu";
+var p1Score = 0;
+var p2Score = 0;
+var highScore = Number(localStorage.getItem("highScore") || 0);
 var gameOverAudioSent = false;
 var difficultyModifier = 0;
 
@@ -319,6 +323,13 @@ function renderPrometheus() {
 const socket = new WebSocket('ws://localhost:6767');
 socket.onopen = () => {
     document.getElementById("websocketValue").textContent = "YES";
+
+    socket.send(JSON.stringify({
+        type: "score",
+        p1: p1Score,
+        p2: p2Score,
+        high: highScore
+    }));
 };
 
 socket.onmessage = (event) => {
@@ -386,6 +397,24 @@ function renderMenu() {
 function startGame() {
 
     eagles = [];
+    p1Score = 0; 
+    p2Score = 0;
+
+    // Send update score json packet 
+    socket.send(JSON.stringify({
+        type: "score",
+        p1: p1Score,
+        p2: p2Score,
+        high: highScore
+    }));
+
+    // Send audio ready json packet
+    socket.send(JSON.stringify({
+        type: "audio",
+        event: "ready"
+    }));
+
+
     gameState = "running";
     gameOverAudioSent = false;
 }
@@ -413,8 +442,30 @@ function updateGameplayWireless() {
             let playerDist = Math.sqrt(cdx * cdx + cdy * cdy);
             if (playerDist < eagleRadius) {
                 eagle.alive = false;
-                // Send audio cue to base node
+
+                const playerId = Number(Object.keys(players).find(id => players[id] === player));
+
+                if (playerId === 1) {
+                    p1Score++;
+                } else if (playerId === 2) {
+                    p2Score++;
+                }
+
+                const totalScore = p1Score + p2Score;
+
+                if (totalScore > highScore) {
+                    highScore = totalScore;
+                    localStorage.setItem("highScore", String(highScore));
+                }
+
                 socket.send(JSON.stringify({"type":"audio", "event":"eagle_killed"}));
+
+                socket.send(JSON.stringify({
+                    type: "score",
+                    p1: p1Score,
+                    p2: p2Score,
+                    high: highScore
+                }));
             }
         }
     }

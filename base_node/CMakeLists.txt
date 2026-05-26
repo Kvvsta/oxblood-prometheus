@@ -9,6 +9,7 @@ target_sources(app PRIVATE
     src/nus_client.c
     src/mobile_link.c
     src/json_serial.c
-
-    
+    src/serial_audio.c
+    src/audio_out.c
+    src/ui_display.c
 )
