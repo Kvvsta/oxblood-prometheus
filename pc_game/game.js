@@ -259,6 +259,13 @@ function updateTelemetryData() {
 const socket = new WebSocket('ws://localhost:6767');
 socket.onopen = () => {
     document.getElementById("websocketValue").textContent = "YES";
+
+    socket.send(JSON.stringify({
+        type: "score",
+        p1: p1Score,
+        p2: p2Score,
+        high: highScore
+    }));
 };
 
 socket.onmessage = (event) => {
@@ -328,6 +335,13 @@ function startGame() {
     //addPlayer();
     p1Score = 0; 
     p2Score = 0;
+
+    socket.send(JSON.stringify({
+        type: "score",
+        p1: p1Score,
+        p2: p2Score,
+        high: highScore
+    }));
 
     gameState = "running";
     gameOverAudioSent = false;
