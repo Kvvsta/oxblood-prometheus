@@ -13,7 +13,7 @@
 #define CHANNELS 2
 #define BLOCK_FRAMES 256
 #define BLOCK_SIZE (BLOCK_FRAMES * CHANNELS * sizeof(int16_t))
-#define BLOCK_COUNT 4
+#define BLOCK_COUNT 12
 #define TOTAL_FRAMES ((SAMPLE_RATE_HZ * TONE_MS) / 1000)
 #define I2S_NODE DT_NODELABEL(i2s0)
 #define AUDIO_EVENT_MAX_LEN 24
@@ -27,12 +27,18 @@ static void audio_thread(void *a, void *b, void *c);
 K_THREAD_DEFINE(audio_tid, AUDIO_STACK_SIZE, audio_thread, NULL, NULL, NULL,
                 AUDIO_PRIORITY, 0, 0);
 
-//K_MEM_SLAB_DEFINE(i2s_mem_slab, BLOCK_SIZE, BLOCK_COUNT, 4);
+/* 
+ * I2S DMA buffers should be in non-cache memory on ESP32.
+ * Each slab block holds one stereo audio block.
+ */
 K_MEM_SLAB_DEFINE_IN_SECT_STATIC(i2s_mem_slab, __nocache, BLOCK_SIZE, BLOCK_COUNT, 4);
 
 static const struct device *i2s_dev = DEVICE_DT_GET_OR_NULL(I2S_NODE);
-//static int16_t sample_buf[NUM_SAMPLES];
 
+/*
+ * Public non-blocking API.
+ * Other files call this to request an audio event.
+ */
 void audio_out_queue_event(const char* event) {
     char msg[AUDIO_EVENT_MAX_LEN] = {0};
 
@@ -47,6 +53,10 @@ void audio_out_queue_event(const char* event) {
     }
 }
 
+/*
+ * Dedicated audio thread.
+ * Prevents I2S playback from blocking UART/BLE/game data handling.
+ */
 static void audio_thread(void* a, void* b, void* c) {
 
     char event[AUDIO_EVENT_MAX_LEN];
@@ -57,25 +67,85 @@ static void audio_thread(void* a, void* b, void* c) {
     }
 }
 
-static void fill_tone_block(int16_t *buf, int freq_hz, int start_frame, int frames)
-{
+/*
+ * Fill one stereo I2S block.
+ *
+ * freq_hz > 0: generate sine tone.
+ * freq_hz <= 0: generate silence.
+ */
+static void fill_tone_block(int16_t *buf, int freq_hz, int start_frame, int frames) {
 	for (int i = 0; i < frames; i++) {
-		float t = (float)(start_frame + i) / (float)SAMPLE_RATE_HZ;
-		float s = sinf(2.0f * 3.1415926f * (float)freq_hz * t);
-		int16_t sample = (int16_t)(s * 8000.0f);
+
+		int16_t sample = 0;
+
+		if (freq_hz > 0) {
+			float t = (float)(start_frame + i) / (float)SAMPLE_RATE_HZ;
+			float s = sinf(2.0f * 3.1415926f * (float)freq_hz * t);
+			sample = (int16_t)(s * 12000.0f);
+		}
 
 		buf[2 * i] = sample;
 		buf[2 * i + 1] = sample;
 	}
 
+	// Zero pad unused part of block 
 	for (int i = frames; i < BLOCK_FRAMES; i++) {
 		buf[2 * i] = 0;
 		buf[2 * i + 1] = 0;
 	}
 }
 
-void audio_out_init(void)
-{
+/*
+ * Play a sequence of tone blocks.
+ *
+ * Each entry in freqs[] lasts:
+ *     BLOCK_FRAMES / SAMPLE_RATE_HZ = 256 / 16000 = 16 ms.
+ *
+ * Example:
+ *     {260, 260, 0, 180, 180}
+ * gives two high blocks, one silent block, two lower blocks.
+ */
+static void play_tone_sequence(const int *freqs, int count) {
+	bool started = false;
+
+	for (int i = 0; i < count; i++) {
+		void *tx_block;
+
+		int err = k_mem_slab_alloc(&i2s_mem_slab, &tx_block, K_FOREVER);
+		if (err) {
+			json_emit_status("audio", "i2s slab alloc failed");
+			break;
+		}
+
+		fill_tone_block((int16_t *)tx_block, freqs[i], 0, BLOCK_FRAMES);
+
+		err = i2s_write(i2s_dev, tx_block, BLOCK_SIZE);
+		if (err) {
+			k_mem_slab_free(&i2s_mem_slab, tx_block);
+			json_emit_status("audio", "i2s write failed");
+			break;
+		}
+
+		if (!started) {
+			err = i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_START);
+			if (err) {
+				json_emit_status("audio", "i2s start failed");
+				break;
+			}
+			started = true;
+		}
+	}
+
+	// DRAIN lets queued audio finish before next in queue 
+	if (started) {
+		(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_DRAIN);
+	}
+}
+
+/*
+ * Configure the I2S peripheral once at startup.
+ */
+void audio_out_init(void) {
 	if (!i2s_dev || !device_is_ready(i2s_dev)) {
 		json_emit_status("audio", "i2s device not ready");
 		return;
@@ -102,6 +172,9 @@ void audio_out_init(void)
 	json_emit_status("audio", "m5 core2 i2s audio ready");
 }
 
+/*
+ * Convert game events into sound effects.
+ */
 void audio_out_play_event(const char *event)
 {
 	if (!i2s_dev || !device_is_ready(i2s_dev)) {
@@ -113,58 +186,26 @@ void audio_out_play_event(const char *event)
 		return;
 	}
 
-	int freq_hz;
-
 	if (strcmp(event, "eagle_killed") == 0) {
-		freq_hz = 4000;
-		json_emit_audio_debug("eagle_killed", "tone_4000hz");
+		static const int eagle_freqs[] = {
+			1800, 2400, 3200, 2600, 3600, 3000, 2200, 1800
+		};
+
+		json_emit_audio_debug("eagle_killed", "eagle_screech");
+		play_tone_sequence(eagle_freqs, ARRAY_SIZE(eagle_freqs));
+		return;
 	} else if (strcmp(event, "game_over") == 0) {
-		freq_hz = 800;
-		json_emit_audio_debug("game_over", "tone_800hz");
+		static const int game_over_freqs[] = {
+			260, 260, 260, 260,
+			0, 0,
+			180, 180, 180, 180
+		};
+
+		json_emit_audio_debug("game_over", "duh_duh");
+		play_tone_sequence(game_over_freqs, ARRAY_SIZE(game_over_freqs));
+		return;
 	} else {
 		json_emit_audio_debug(event, "ignored_unknown_audio_event");
 		return;
-	}
-
-	int frame = 0;
-	bool started = false;
-
-	while (frame < TOTAL_FRAMES) {
-		void *tx_block;
-		int frames_this_block = TOTAL_FRAMES - frame;
-
-		if (frames_this_block > BLOCK_FRAMES) {
-			frames_this_block = BLOCK_FRAMES;
-		}
-
-		int err = k_mem_slab_alloc(&i2s_mem_slab, &tx_block, K_MSEC(100));
-		if (err) {
-			json_emit_status("audio", "i2s slab alloc failed");
-			break;
-		}
-
-		fill_tone_block((int16_t *)tx_block, freq_hz, frame, frames_this_block);
-
-		err = i2s_write(i2s_dev, tx_block, BLOCK_SIZE);
-		if (err) {
-			k_mem_slab_free(&i2s_mem_slab, tx_block);
-			json_emit_status("audio", "i2s write failed");
-			break;
-		}
-
-		if (!started) {
-			err = i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_START);
-			if (err) {
-				json_emit_status("audio", "i2s start failed");
-				break;
-			}
-			started = true;
-		}
-
-		frame += frames_this_block;
-	}
-
-	if (started) {
-		(void)i2s_trigger(i2s_dev, I2S_DIR_TX, I2S_TRIGGER_DROP);
 	}
 }
