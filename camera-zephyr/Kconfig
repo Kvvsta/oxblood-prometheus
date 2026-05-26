@@ -1,0 +1,25 @@
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "Oxblood camera colour detection"
+
+menu "Video capture configuration"
+
+config VIDEO_FRAME_HEIGHT
+	int "Height of the video frame"
+	default 240
+
+config VIDEO_FRAME_WIDTH
+	int "Width of the video frame"
+	default 240
+
+config VIDEO_PIXEL_FORMAT
+	string "Pixel format of the video frame"
+	default "RGBP"
+
+config VIDEO_CTRL_VFLIP
+	bool "Mirror the video frame vertically"
+	default y
+
+endmenu
+
+source "Kconfig.zephyr"
