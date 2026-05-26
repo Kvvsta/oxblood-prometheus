@@ -89,7 +89,13 @@ void ui_display_init(void) {
     lv_obj_set_style_text_color(label_high_score, lv_color_white(), LV_PART_MAIN);
     lv_obj_align(label_high_score, LV_ALIGN_TOP_LEFT, 175, 115);
 
-	lv_timer_handler();
+	//lv_timer_handler();
+    for (int i = 0; i < 10; i++) {
+        lv_timer_handler();
+        k_msleep(20);
+    }
+
+    json_emit_status("display", "ready");
 }
 
 /*
