@@ -10,9 +10,6 @@
 
 #define LCD_PWR_NODE DT_ALIAS(led0)
 
-static const struct gpio_dt_spec lcd_pwr =
-	GPIO_DT_SPEC_GET(LCD_PWR_NODE, gpios);
-
 static lv_obj_t *label_title;
 static lv_obj_t *label_p1;
 static lv_obj_t *label_p2;
@@ -22,6 +19,13 @@ static lv_obj_t *label_p2_score;
 static lv_obj_t *label_high_score;
 static lv_obj_t *label_gesture;
 
+/*
+ * Initialise LVGL objects on the M5Core2 screen.
+ *
+ * Layout:
+ *   Left column  = IMU, gesture, audio status
+ *   Right column = scores
+ */
 void ui_display_init(void) {
 
     const struct device *display = DEVICE_DT_GET(DT_CHOSEN(zephyr_display));
@@ -88,6 +92,9 @@ void ui_display_init(void) {
 	lv_timer_handler();
 }
 
+/*
+ * Update one player's gyro telemetry.
+ */
 void ui_display_update_imu(int player, float gy, float gz) {
 	char buf[64];
 
@@ -101,6 +108,9 @@ void ui_display_update_imu(int player, float gy, float gz) {
 	}
 }
 
+/*
+ * Update player scores and high score. 
+ */
 void ui_display_update_score(int p1_score, int p2_score, int high_score) {
 	char buf[64];
 
@@ -123,6 +133,9 @@ void ui_display_update_score(int p1_score, int p2_score, int high_score) {
 	}
 }
 
+/*
+ * Update audio status label
+ */
 void ui_display_update_audio(const char *event) {
 	char buf[64];
 
@@ -133,6 +146,9 @@ void ui_display_update_audio(const char *event) {
 	}
 }
 
+/*
+ * Update detected gesture label. 
+ */
 void ui_display_update_gesture(const char *gesture) {
     char buf[64];
 
@@ -146,6 +162,9 @@ void ui_display_update_gesture(const char *gesture) {
     }
 }
 
+/*
+ * Called periodically from main loop to refesh LVGL objects
+ */
 void ui_display_tick(void) {
 	lv_timer_handler();
 }
