@@ -75,6 +75,21 @@ static void process_line(const char *line) {
 		return;
 	}
 
+	// Process winner json packets
+	if (strstr(line, "\"type\":\"winner\"") != NULL ||
+    	strstr(line, "\"type\": \"winner\"") != NULL) {
+
+		if (strstr(line, "P1")) {
+			ui_display_update_winner("P1");
+		} else if (strstr(line, "P2")) {
+			ui_display_update_winner("P2");
+		} else {
+			ui_display_update_winner("NONE");
+		}
+
+    	return;
+	}
+
 	// Process gesture packets
 	if (strstr(line, "\"type\":\"gesture\"") != NULL ||
 		strstr(line, "\"type\": \"gesture\"") != NULL) {
