@@ -44,7 +44,6 @@ _loop: asyncio.AbstractEventLoop | None = None
 async def broadcast(msg: str) -> None:
     if not clients:
         return
-    print("Abt to send data to game")
     await asyncio.gather(*[c.send(msg) for c in list(clients)],
                          return_exceptions=True)
 

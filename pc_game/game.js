@@ -5,7 +5,7 @@
 
 
 const DEAD_ZONE  = 0.18;  // rad/s — ignore noise below this
-const SCALE      = 470.0; // linear scale factor (tune this)
+const SCALE      = 500.0; // linear scale factor (tune this)
 const AXIS_BIAS  = 3.5;   // diagonal suppression
 
 // Canvas information /////////////////////////////////////////////////////////
@@ -21,6 +21,7 @@ canvas.width = canvas.clientWidth;
 // Game state
 var gameState = "menu";
 var gameOverAudioSent = false;
+var difficultyModifier = 0;
 
 // Player details /////////////////////////////////////////////////////////////
 
@@ -152,14 +153,51 @@ document.addEventListener("keydown", (event) => {
 
 // Eagles /////////////////////////////////////////////////////////////////////
 var eagles = [];// array of eagles
+
+// eagle animation frames
+const frm1 = new Image();
+frm1.src = "eagle_sprites/eagle_1.PNG";
+const frm2 = new Image();
+frm2.src = "eagle_sprites/eagle_2.PNG";
+const frm3 = new Image();
+frm3.src = "eagle_sprites/eagle_3.PNG";
+const frm4 = new Image();
+frm4.src = "eagle_sprites/eagle_4.PNG";
+const frm5 = new Image();
+frm5.src = "eagle_sprites/eagle_5.PNG";
+const frm6 = new Image();
+frm6.src = "eagle_sprites/eagle_6.PNG";
+const frm7 = new Image();
+frm7.src = "eagle_sprites/eagle_7.PNG";
+const frm8 = new Image();
+frm8.src = "eagle_sprites/eagle_8.PNG";
+const frm9 = new Image();
+frm9.src = "eagle_sprites/eagle_9.PNG";
+
+var eagleFrames = [frm1, frm2, frm3, frm4, frm5, frm6, frm7, frm8, frm9];
 var eagleRadius = 15;
 
+const EAGLE_W = 1070; // width of eagle frame PNG in pixels
+const EAGLE_H = 962; // height ""
+const EAGLE_DRAW_HEIGHT = eagleRadius * 4; // adjust if eagles are too small on screen
+const EAGLE_DRAW_WIDTH = EAGLE_DRAW_HEIGHT * (EAGLE_W / EAGLE_H); // preserve aspect ratio
+
+const BASE_EAGLE_FPS = 6; // frame rate at speed=2 (slowest eagle)
+const EAGLE_FRAME_COUNT = 9;
+
 function spawnNewEagle() {
+
+    // TODO exit function if game is paused rn
+    if (gameState !== "running") {
+        return;
+    }
+
     // choose a random side of screen
     let side = Math.floor(Math.random() * 4);
 
     let x,y; // variables for eagle coordinates
     let speed; // variable for eagle speed
+    let facingRight = true; // Eagle image faces right by default
 
     // Calculate starting coordinates of eagle
     switch (side) {
@@ -189,15 +227,28 @@ function spawnNewEagle() {
             break;
     }
 
+    // Determine if eagle should be facing left
+    if (x > canvas.width / 2) {
+        facingRight = false;
+    }
+
     // Generate speed of eagle (base speed is 2)
-    speed = 2 + Math.floor(Math.random() * 3);
+    speed = 2 + Math.floor(Math.random() * 3) + difficultyModifier;
+
+    // Calculate how long eagle's animation frames should last
+    // Note: speed/2 since 2 is the base eagle speed
+    let frameLength = 1 / (BASE_EAGLE_FPS * (speed / 2));
 
     // Save the eagle to the array
     eagles.push({
         x: x,
         y: y,
         speed: speed,
-        alive: true
+        alive: true,
+        frame: 0,
+        frameTimer: 0, // Tracks how long the eagle has been animated for
+        facingRight: facingRight,
+        frameLength: frameLength
     });
 }
 
@@ -218,14 +269,40 @@ function updateEaglePos() {
     }
 }
 
+function advanceEagleFrame(dt) {
+    for (let eagle of eagles) {
+        eagle.frameTimer += dt;
+        // Calculate how many frames the eagle should have flown through
+        if (eagle.frameTimer >= eagle.frameLength) {
+            eagle.frame = (eagle.frame + 1) % EAGLE_FRAME_COUNT;
+            eagle.frameTimer -= eagle.frameLength;
+        }
+    }
+}
+
 function renderEagles() {
     for (let eagle of eagles) {
-        // Draw eagle
-        ctx.fillStyle = "orange";
-        ctx.beginPath();
-        ctx.arc(eagle.x, eagle.y, eagleRadius, 0, Math.PI * 2);
-        ctx.fill();
+        const img = eagleFrames[eagle.frame];
+        if (!img.complete) continue; // skip if not loaded yet
+
+        ctx.save();
+        ctx.translate(eagle.x, eagle.y);
+
+        if (!eagle.facingRight) {
+            ctx.scale(-1, 1); // flip horizontally
+        }
+
+        ctx.drawImage(
+            img,
+            -EAGLE_DRAW_WIDTH / 2, // centre the image on the eagle's position
+            -EAGLE_DRAW_HEIGHT / 2,
+            EAGLE_DRAW_WIDTH,
+            EAGLE_DRAW_HEIGHT
+        );
+
+        ctx.restore();
     }
+    
 }
 
 // Prometheus /////////////////////////////////////////////////////////////////
@@ -236,19 +313,6 @@ function renderPrometheus() {
     ctx.arc(canvas.width / 2, canvas.height / 2, 50, 0, 2 * Math.PI);
     ctx.fillStyle = "maroon";
     ctx.fill();
-}
-
-// Telemetry data 
-var pitch = 60; // starting values
-var roll = 67;
-var latency = 67;
-var gesture = "PAUSE";
-
-function updateTelemetryData() {
-    document.getElementById("pitchValue").textContent = pitch;
-    document.getElementById("rollValue").textContent = roll;
-    document.getElementById("latencyValue").textContent = latency;
-    document.getElementById("gestureValue").textContent = gesture;
 }
 
 // Connect to the server (MAKE SURE LIVER BACKEND.PY RUNNING)
@@ -283,7 +347,9 @@ socket.onmessage = (event) => {
         }
 
         if (data.gesture === "RESTART") {
-            startGame();
+            //startGame();
+            // increase speed and add by 2 * 25%
+            difficultyModifier += 0.5;
         }
     }
 };
@@ -302,7 +368,7 @@ function renderMenu() {
     ctx.textAlign = "center";
 
     ctx.fillText(
-        "LIMITED LIVERS",
+        "Shoot the eagles before they reach Prometheus. Show no mercy.",
         canvas.width / 2,
         canvas.height / 2
     );
@@ -310,7 +376,7 @@ function renderMenu() {
     ctx.font = "24px Arial";
 
     ctx.fillText(
-        "Show START gesture",
+        "Show RED card to begin. Show PURPLE card to pause.",
         canvas.width / 2,
         canvas.height / 2 + 60
     );
@@ -320,9 +386,6 @@ function renderMenu() {
 function startGame() {
 
     eagles = [];
-    //addPlayer();
-    //addPlayer();
-
     gameState = "running";
     gameOverAudioSent = false;
 }
@@ -360,6 +423,7 @@ function updateGameplayWireless() {
     eagles = eagles.filter(eagle => eagle.alive);
     // Move alive eagles
     updateEaglePos();
+    advanceEagleFrame(dt);
 }
 
 function drawGame() {
@@ -376,6 +440,23 @@ function drawGame() {
     renderEagles();
 }
 
+function renderPaused() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "white";
+
+    ctx.font = "48px Arial";
+
+    ctx.textAlign = "center";
+
+    ctx.fillText(
+        "PAUSED",
+        canvas.width / 2,
+        canvas.height / 2
+    );
+
+}
+
 function renderGameOver() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -386,7 +467,7 @@ function renderGameOver() {
     ctx.textAlign = "center";
 
     ctx.fillText(
-        "LIMITED LIVERS",
+        "You have failed.",
         canvas.width / 2,
         canvas.height / 2
     );
@@ -394,7 +475,7 @@ function renderGameOver() {
     ctx.font = "24px Arial";
 
     ctx.fillText(
-        "Oops you lost gesture to restart",
+        "Show RED card to restart.",
         canvas.width / 2,
         canvas.height / 2 + 60
     );
@@ -416,6 +497,7 @@ function gameLoop() {
             break;
 
         case "paused":
+            renderPaused();
             break;
 
         case "gameover":

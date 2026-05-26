@@ -30,18 +30,6 @@ canvas {
     box-sizing: border-box;
 }
 
-#telemetrySection {
-
-    flex: 3;
-
-    box-sizing: border-box;
-
-    background: rgb(75, 5, 37);
-    color: rgb(194, 142, 51);
-
-    font-family: "Caesar Dressing";
-}
-
 #gameTitle {
 
     font-family: "Caesar Dressing";
