@@ -331,17 +331,23 @@ function renderMenu() {
 function startGame() {
 
     eagles = [];
-    //addPlayer();
-    //addPlayer();
     p1Score = 0; 
     p2Score = 0;
 
+    // Send update score json packet 
     socket.send(JSON.stringify({
         type: "score",
         p1: p1Score,
         p2: p2Score,
         high: highScore
     }));
+
+    // Send audio ready json packet
+    socket.send(JSON.stringify({
+        type: "audio",
+        event: "ready"
+    }));
+
 
     gameState = "running";
     gameOverAudioSent = false;
