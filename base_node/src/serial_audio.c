@@ -95,6 +95,8 @@ static void process_line(const char *line) {
 	} else if (strstr(line, "game_over") != NULL) {
 		ui_display_update_audio("game_over");
 		audio_out_queue_event("game_over");
+	} else if (strstr(line, "ready") != NULL) {
+    	ui_display_update_audio("ready"); 
 	} else {
 		json_emit_status("audio_rx", "unknown audio event");
 	}
