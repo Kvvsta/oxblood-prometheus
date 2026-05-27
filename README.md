@@ -170,3 +170,14 @@ The camera performs on-device colour detection to trigger in-game events. Since 
 - 1× M5Stack Core2 ESP32 (Base Node)
 - 1× ESP32-S3-EYE Camera
 - 1× PC
+
+## User Guide
+Ensure Mosquitto broker is running on your device. 
+
+Connect base node (M5 COre2) to the USB serial port of your PC. 
+
+Run liver_backend.py, and follow the http link printed on the terminal to a web browser. C
+
+onnect the two mobile nodes to a power source, and connect camera to power source. 
+
+Hold up red card to camera, ensuring it takes up majority of the screen. Enjoy the game.
