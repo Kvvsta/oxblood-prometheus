@@ -333,7 +333,7 @@ function renderPrometheus() {
 // Connect to the server (MAKE SURE LIVER BACKEND.PY RUNNING)
 const socket = new WebSocket('ws://localhost:6767');
 socket.onopen = () => {
-    document.getElementById("websocketValue").textContent = "YES";
+    console.log("WebSocket connected");
 
     socket.send(JSON.stringify({
         type: "score",
